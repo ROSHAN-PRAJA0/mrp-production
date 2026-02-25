@@ -2,7 +2,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, Package, Factory, Users, 
-  Settings, LogOut 
+  Settings, LogOut ,Briefcase, RefreshCcw  
 } from "lucide-react";
 import { auth } from "../config/firebase";
 import { signOut } from "firebase/auth";
@@ -22,7 +22,9 @@ export default function Sidebar() {
     { icon: <Package size={20}/>, label: "Inventory", path: "/inventory" },
     { icon: <Factory size={20}/>, label: "Manufacturing", path: "/manufacturing" },
     { icon: <Users size={20}/>, label: "Employees", path: "/employees" },
+    { icon: <Briefcase size={20}/>, label: "Suppliers", path: "/manage-suppliers" },
     { icon: <Settings size={20}/>, label: "Settings", path: "/settings" },
+
   ];
 
   return (
