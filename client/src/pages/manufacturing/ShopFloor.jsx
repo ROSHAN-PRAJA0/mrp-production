@@ -1,5 +1,5 @@
-import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
+import Sidebar from "../../components/Sidebar";
+import Topbar from "../../components/Topbar";
 import { HardHat, Activity, Clock, Wrench } from "lucide-react";
 
 export default function ShopFloor() {

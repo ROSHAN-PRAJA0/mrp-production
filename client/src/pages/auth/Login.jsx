@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebase";
+import { auth, db } from "../../config/firebase";
 import { useNavigate } from "react-router-dom";
 import { Factory, Eye, EyeOff, LogIn, ShieldCheck } from "lucide-react";
 

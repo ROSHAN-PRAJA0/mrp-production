@@ -1,9 +1,9 @@
 import { useState, useEffect, useContext, useMemo } from "react";
-import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
+import Sidebar from "../../components/Sidebar";
+import Topbar from "../../components/Topbar";
 import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { AuthContext } from "../routes/AuthProvider";
+import { db } from "../../config/firebase";
+import { AuthContext } from "../../routes/AuthProvider";
 import Select from "react-select";
 import { Plus, Trash2, Save, Layers, Info } from "lucide-react";
 import toast from "react-hot-toast";

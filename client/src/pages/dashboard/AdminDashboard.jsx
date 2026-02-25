@@ -1,6 +1,6 @@
-import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
-import DashboardCards from "../components/DashboardCards";
+import Sidebar from "../../components/Sidebar";
+import Topbar from "../../components/Topbar";
+import DashboardCards from "../../components/DashboardCards";
 import { TrendingUp, AlertCircle, CheckCircle2, BarChart3 } from "lucide-react";
 
 export default function AdminDashboard() {
