@@ -2,7 +2,6 @@ import React, { useState, useEffect, useContext } from "react";
 import {
   collection,
   addDoc,
-  onSnapshot,
   doc,
   query,
   where,
@@ -11,11 +10,10 @@ import {
   updateDoc,
   increment,
 } from "firebase/firestore";
-import { db } from "../../config/firebase"; // Ensure correct path
+import { db } from "../../config/firebase"; 
 import Sidebar from "../../components/Sidebar";
-import Topbar from "../../components/Topbar";
 import { AuthContext } from "../../routes/AuthProvider";
-import { PlusCircle, Percent, Search, BarChart2, Package, Trash2, Hash, FileText, IndianRupee } from "lucide-react";
+import { PlusCircle, Search, Package, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const AddStock = () => {
@@ -39,7 +37,7 @@ const AddStock = () => {
   const [discount, setDiscount] = useState("");
   const [calculatedPrice, setCalculatedPrice] = useState(null);
 
-  // Selling Price Calculator Logic (Preserved)
+  // Selling Price Calculator Logic
   useEffect(() => {
     if (mrp > 0 && discount >= 0 && discount <= 100) {
       const finalPrice = mrp - mrp * (discount / 100);
@@ -68,7 +66,7 @@ const AddStock = () => {
   const getItemDetails = async (index) => {
     try {
       const itemid = stockItems[index].itemid;
-      if (!itemid || !userId) return toast.error("⚠️ Enter Part No first");
+      if (!itemid || !userId) return toast.error("Enter Part No first");
 
       const q = query(collection(db, "users", userId, "stocks"), where("itemid", "==", itemid));
       const querySnap = await getDocs(q);
@@ -79,12 +77,12 @@ const AddStock = () => {
         updated[index] = { 
           ...updated[index], 
           ...existingItem, 
-          quantity: "", // Force user to enter the new intake amount
+          quantity: "", 
         };
         setStockItems(updated);
-        toast.success("✅ Part details fetched!");
+        toast.success("Part details fetched!");
       } else {
-        toast.error("❌ New Part Detected. Fill details.");
+        toast.error("New Part Detected. Fill details.");
       }
     } catch (err) {
       toast.error("Error fetching part details.");
@@ -95,7 +93,7 @@ const AddStock = () => {
     e.preventDefault();
     if (isSubmitting || !userId) return;
     setIsSubmitting(true);
-    const toastId = toast.loading("Updating raw materials...");
+    const toastId = toast.loading("Updating inventory and recording movements...");
 
     try {
       const validItems = stockItems.filter(item => item.itemid && item.quantity > 0);
@@ -110,7 +108,6 @@ const AddStock = () => {
           await updateDoc(itemRef, {
             quantity: increment(Number(item.quantity)),
             actualPrice: Number(item.actualPrice),
-            sellingPrice: Number(item.sellingPrice),
             groupNo: item.groupNo,
             groupName: item.groupName,
             updatedAt: serverTimestamp(),
@@ -120,12 +117,22 @@ const AddStock = () => {
             ...item,
             quantity: Number(item.quantity),
             actualPrice: Number(item.actualPrice),
-            sellingPrice: Number(item.sellingPrice),
             addedAt: serverTimestamp(),
           });
         }
+
+        await addDoc(collection(db, "users", userId, "movements"), {
+          itemid: item.itemid,
+          name: item.name,
+          type: "IN",
+          quantity: Number(item.quantity),
+          reason: "Raw Material Intake",
+          timestamp: serverTimestamp(),
+          user: user.email
+        });
       }
-      toast.success("✅ Inventory updated!", { id: toastId });
+
+      toast.success("Inventory updated and movements recorded!", { id: toastId });
       setStockItems([initialRowState]);
     } catch (err) {
       toast.error("Submission failed.", { id: toastId });
@@ -137,21 +144,35 @@ const AddStock = () => {
   const totalValue = stockItems.reduce((acc, item) => acc + Number(item.quantity) * Number(item.actualPrice || 0), 0);
 
   return (
-    <div className="bg-[#f8fafc] min-h-screen flex">
+    <div className="bg-[#f8fafc] min-h-screen flex text-left">
       <Sidebar />
       <div className="flex-1 ml-64 flex flex-col">
-        <Topbar />
+        {/* Shifting Content Up by removing Topbar and using p-8 directly */}
         <main className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Header */}
-          <div className="flex justify-between items-center">
+          
+          {/* Header with Name/Role in Right Corner */}
+          <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3"><Package className="text-indigo-600"/> Raw Material Intake</h2>
+              <h2 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
+                <Package className="text-indigo-600"/> Raw Material Intake
+              </h2>
               <p className="text-slate-500 font-medium">Add materials with Part No, Group Details, and Cost.</p>
+            </div>
+
+            {/* User Details in Top Right Corner */}
+            <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+              <div className="text-right pl-2">
+                <p className="text-sm font-bold text-slate-800 leading-none">{user?.displayName || user?.name || "Administrator"}</p>
+                <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-1">Admin Account</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
+                {(user?.displayName || user?.name || "A").charAt(0).toUpperCase()}
+              </div>
             </div>
           </div>
 
-          {/* Calculator Tool (Preserved Feature) */}
-          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          {/* Calculator Tool */}
+          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4 items-center mt-2">
              <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border">
                 <span className="text-xs font-bold text-slate-400">MRP</span>
                 <input type="number" value={mrp} onChange={(e) => setMrp(e.target.value)} className="bg-transparent outline-none w-full font-bold text-right"/>
@@ -174,7 +195,8 @@ const AddStock = () => {
                   <tr>
                     <th className="px-6 py-4">Part No</th>
                     <th className="px-6 py-4">Description</th>
-                    <th className="px-6 py-4">Group (No/Name)</th>
+                    <th className="px-6 py-4">Group Name</th>
+                    <th className="px-6 py-4">Group No</th>
                     <th className="px-6 py-4">Unit</th>
                     <th className="px-6 py-4">Quantity</th>
                     <th className="px-6 py-4">Cost (₹)</th>
@@ -190,12 +212,14 @@ const AddStock = () => {
                           <button type="button" onClick={() => getItemDetails(index)} className="bg-indigo-600 text-white p-2"><Search size={16}/></button>
                         </div>
                       </td>
-                      <td className="p-4"><input type="text" value={item.name} onChange={(e) => handleInputChange(index, "name", e.target.value)} className="w-full outline-none text-sm font-semibold" placeholder="Steel Plate 5mm"/></td>
                       <td className="p-4">
-                        <div className="flex flex-col gap-1">
-                          <input type="text" value={item.groupNo} onChange={(e) => handleInputChange(index, "groupNo", e.target.value)} className="text-[10px] font-bold text-slate-400 outline-none uppercase" placeholder="GP-01"/>
-                          <input type="text" value={item.groupName} onChange={(e) => handleInputChange(index, "groupName", e.target.value)} className="text-xs font-semibold text-slate-600 outline-none" placeholder="Metals"/>
-                        </div>
+                        <input type="text" value={item.name} onChange={(e) => handleInputChange(index, "name", e.target.value)} className="w-full outline-none text-sm font-semibold" placeholder="Steel Plate 5mm"/>
+                      </td>
+                      <td className="p-4">
+                        <input type="text" value={item.groupName} onChange={(e) => handleInputChange(index, "groupName", e.target.value)} className="w-full outline-none text-sm font-semibold text-slate-600" placeholder="Metals"/>
+                      </td>
+                      <td className="p-4">
+                        <input type="text" value={item.groupNo} onChange={(e) => handleInputChange(index, "groupNo", e.target.value)} className="w-full outline-none text-sm font-bold text-slate-400 uppercase" placeholder="GP-01"/>
                       </td>
                       <td className="p-4">
                          <select value={item.unit} onChange={(e) => handleInputChange(index, "unit", e.target.value)} className="bg-transparent font-bold text-xs outline-none">

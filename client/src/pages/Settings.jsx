@@ -1,5 +1,5 @@
 import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
+
 import { Settings as SettingsIcon, Save, Globe, Lock, Bell } from "lucide-react";
 
 export default function Settings() {
@@ -7,7 +7,7 @@ export default function Settings() {
     <div className="bg-[#f8fafc] min-h-screen flex">
       <Sidebar />
       <div className="flex-1 ml-64 flex flex-col">
-        <Topbar />
+        
         <main className="p-8 space-y-6 max-w-4xl">
           <h2 className="text-3xl font-extrabold text-slate-900">System Settings</h2>
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8 space-y-8">

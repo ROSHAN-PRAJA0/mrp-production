@@ -1,7 +1,7 @@
 // src/pages/QualityControl.jsx
 import React, { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import Topbar from "../components/Topbar";
+
 import { ShieldCheck, CheckCircle2, XCircle, FileSearch, Send } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -21,7 +21,7 @@ export default function QualityControl() {
     <div className="bg-[#f8fafc] min-h-screen flex">
       <Sidebar />
       <div className="flex-1 ml-64 flex flex-col">
-        <Topbar />
+       
         <main className="p-8 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">

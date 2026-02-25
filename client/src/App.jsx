@@ -9,7 +9,9 @@ import ManufacturingMaster from "./pages/manufacturing/Manufacturing";
 import Employees from "./pages/Employees";
 import Settings from "./pages/Settings";
 import ProtectedRoute from "./routes/ProtectedRoute";
-
+import ProductAlerts from "./pages/inventory/ProductAlerts";
+import ReorderSetup from "./pages/inventory/ReorderSetup";
+import StockMovements from "./pages/inventory/StockMovements";
 function App() {
   return (
     <Routes>
@@ -23,7 +25,10 @@ function App() {
       <Route path="/manufacturing" element={<ProtectedRoute role="admin"><ManufacturingMaster /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute role="admin"><Employees /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute role="admin"><Settings /></ProtectedRoute>} />
-
+      <Route path="/product-alerts" element={<ProtectedRoute role="admin"><ProductAlerts /></ProtectedRoute>} />
+      
+      <Route path="/stock-movements" element={<ProtectedRoute role="admin"><StockMovements /></ProtectedRoute>} />
+      <Route path="/reorder-setup" element={<ProtectedRoute role="admin"><ReorderSetup /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

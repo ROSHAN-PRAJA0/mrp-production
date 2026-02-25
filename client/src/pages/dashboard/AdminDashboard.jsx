@@ -1,5 +1,4 @@
 import Sidebar from "../../components/Sidebar";
-import Topbar from "../../components/Topbar";
 import DashboardCards from "../../components/DashboardCards";
 import { TrendingUp, AlertCircle, CheckCircle2, BarChart3 } from "lucide-react";
 
@@ -10,7 +9,7 @@ export default function AdminDashboard() {
     <div className="bg-[#f8fafc] min-h-screen flex">
       <Sidebar />
       <div className="flex-1 ml-64 flex flex-col">
-        <Topbar />
+        
         <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
           <div className="flex justify-between items-center">
             <div>
