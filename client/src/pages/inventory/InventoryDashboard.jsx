@@ -77,7 +77,7 @@ export default function InventoryDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Top Stock Levels (Bar Chart) */}
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+        <div className="bg-white p-6 rounded-[2.5rem] h-[300px] w-full shadow-sm">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
             <TrendingUp size={16} className="text-indigo-600"/> Top Stock Levels
           </h3>
