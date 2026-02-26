@@ -1,9 +1,9 @@
-// src/components/Sidebar.jsx ko isse replace karein
+// src/components/Sidebar.jsx
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, Package, Factory, Users, 
-  Settings, LogOut ,Briefcase, RefreshCcw  
-} from "lucide-react";
+  Settings, LogOut, Briefcase, RefreshCcw, ShoppingBag 
+} from "lucide-react"; // Ensure ShoppingBag is imported
 import { auth } from "../config/firebase";
 import { signOut } from "firebase/auth";
 
@@ -19,12 +19,13 @@ export default function Sidebar() {
 
   const menu = [
     { icon: <LayoutDashboard size={20}/>, label: "Dashboards", path: "/admin-dashboard" },
-    { icon: <Package size={20}/>, label: "Inventory", path: "/inventory" },
     { icon: <Factory size={20}/>, label: "Manufacturing", path: "/manufacturing" },
+    { icon: <Package size={20}/>, label: "Inventory", path: "/inventory" },
+    // FIXED: Changed path from "/procurement" to "/purchase-orders" to match App.jsx
+    { icon: <ShoppingBag size={20}/>, label: "Procurement", path: "/purchase-orders" }, 
     { icon: <Users size={20}/>, label: "Employees", path: "/employees" },
     { icon: <Briefcase size={20}/>, label: "Suppliers", path: "/manage-suppliers" },
     { icon: <Settings size={20}/>, label: "Settings", path: "/settings" },
-
   ];
 
   return (

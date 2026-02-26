@@ -10,9 +10,13 @@ import Employees from "./pages/Employees";
 import Settings from "./pages/Settings";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import ProductAlerts from "./pages/inventory/ProductAlerts";
-import ReorderSetup from "./pages/inventory/ReorderSetup";
+import ReorderSetup from "./pages/procurement/ReorderSetup";
 import StockMovements from "./pages/inventory/StockMovements";
-import ManageSuppliers from "./pages/inventory/ManageSuppliers";
+import ManageSuppliers from "./pages/procurement/ManageSuppliers";
+import InventoryItems from "./pages/inventory/InventoryItems"; 
+import PurchaseOrdersPage from "./pages/procurement/PurchaseOrders"; 
+import Requirement from "./pages/procurement/Requirement";
+import Procurement from "./pages/procurement/Procurement";
 function App() {
   return (
     <Routes>
@@ -30,6 +34,10 @@ function App() {
       <Route path="/manage-suppliers" element={<ProtectedRoute role="admin"><ManageSuppliers /></ProtectedRoute>} />
       <Route path="/stock-movements" element={<ProtectedRoute role="admin"><StockMovements /></ProtectedRoute>} />
       <Route path="/reorder-setup" element={<ProtectedRoute role="admin"><ReorderSetup /></ProtectedRoute>} />
+      <Route path="/inventory-items" element={<ProtectedRoute role="admin"><InventoryItems /></ProtectedRoute>} />
+      <Route path="/requirement" element={<ProtectedRoute role="admin"><Requirement /></ProtectedRoute>} />
+      <Route path="/purchase-orders" element={<ProtectedRoute role="admin"><PurchaseOrdersPage /></ProtectedRoute>} />
+     <Route path="/procurement" element={<ProtectedRoute role="admin"><Procurement /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
