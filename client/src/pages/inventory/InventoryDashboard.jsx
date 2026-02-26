@@ -4,7 +4,7 @@ import { db } from "../../config/firebase";
 import { AuthContext } from "../../routes/AuthProvider";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area 
+  PieChart, Pie, Cell 
 } from "recharts";
 import { 
   TrendingUp, AlertTriangle, Package, DollarSign, 
@@ -19,12 +19,10 @@ export default function InventoryDashboard() {
   useEffect(() => {
     if (!user) return;
     
-    // Fetch Stocks
     const unsubStock = onSnapshot(collection(db, "users", user.uid, "stocks"), (snap) => {
       setStocks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // Fetch Last 50 Movements
     const qMove = query(collection(db, "users", user.uid, "movements"), orderBy("timestamp", "desc"), limit(50));
     const unsubMove = onSnapshot(qMove, (snap) => {
       setMovements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -33,7 +31,6 @@ export default function InventoryDashboard() {
     return () => { unsubStock(); unsubMove(); };
   }, [user]);
 
-  // Calculations
   const stats = useMemo(() => {
     const totalValue = stocks.reduce((acc, s) => acc + (Number(s.quantity || 0) * Number(s.actualPrice || 0)), 0);
     const lowStockCount = stocks.filter(s => Number(s.quantity) < 100).length;
@@ -43,7 +40,6 @@ export default function InventoryDashboard() {
     return { totalValue, lowStockCount, stockIn, stockOut };
   }, [stocks, movements]);
 
-  // Data for Pie Chart (Stock Distribution)
   const pieData = useMemo(() => {
     const categories = {};
     stocks.forEach(s => {
@@ -53,7 +49,6 @@ export default function InventoryDashboard() {
     return Object.keys(categories).map(key => ({ name: key, value: categories[key] }));
   }, [stocks]);
 
-  // Data for Bar Chart (Top 5 Items by Quantity)
   const barData = useMemo(() => {
     return [...stocks]
       .sort((a, b) => Number(b.quantity) - Number(a.quantity))
@@ -76,12 +71,12 @@ export default function InventoryDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Top Stock Levels (Bar Chart) */}
-        <div className="bg-white p-6 rounded-[2.5rem] h-[300px] w-full shadow-sm">
+        {/* Top Stock Levels (Bar Chart) - FIXED STRUCTURE */}
+        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
             <TrendingUp size={16} className="text-indigo-600"/> Top Stock Levels
           </h3>
-          <div className="h-64">
+          <div className="h-[300px] w-full"> 
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />

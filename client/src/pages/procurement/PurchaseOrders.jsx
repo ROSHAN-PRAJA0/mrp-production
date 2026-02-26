@@ -32,8 +32,8 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="bg-[#f8fafc] min-h-screen flex">
       <Sidebar />
-      <div className="flex-1 ml-64">
-        <main className="p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex-1 ml-64 w-full p-6">
+        <main className="p-8 space-y-6 w-full p-6">
           
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-black uppercase text-slate-800">
