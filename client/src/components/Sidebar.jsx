@@ -6,7 +6,7 @@ import {
   Users, 
   Settings, 
   LogOut, 
-  Briefcase, 
+  PhoneCall, // Suppliers (Briefcase) ki jagah CRM ke liye
   ShoppingBag 
 } from "lucide-react";
 import { auth } from "../config/firebase";
@@ -33,6 +33,11 @@ export default function Sidebar() {
       path: "/admin-dashboard" 
     },
     { 
+      icon: <PhoneCall size={20}/>, // Naya CRM section
+      label: "CRM", 
+      path: "/crm" 
+    },
+    { 
       icon: <Factory size={20}/>, 
       label: "Manufacturing", 
       path: "/manufacturing" 
@@ -51,11 +56,6 @@ export default function Sidebar() {
       icon: <Users size={20}/>, 
       label: "Employees", 
       path: "/employees" 
-    },
-    { 
-      icon: <Briefcase size={20}/>, 
-      label: "Suppliers", 
-      path: "/manage-suppliers" 
     },
     { 
       icon: <Settings size={20}/>, 
@@ -78,7 +78,7 @@ export default function Sidebar() {
             key={item.label} 
             onClick={() => navigate(item.path)}
             className={`flex items-center gap-4 p-3.5 rounded-xl cursor-pointer transition-all ${
-              location.pathname === item.path 
+              location.pathname.startsWith(item.path) // startsWith taaki sub-pages par bhi active rahe
                 ? "bg-indigo-600 text-white shadow-lg font-bold" 
                 : "hover:bg-slate-800"
             }`}

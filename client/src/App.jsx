@@ -16,6 +16,8 @@ import InventoryItems from "./pages/inventory/InventoryItems";
 import PurchaseOrdersPage from "./pages/procurement/PurchaseOrders"; 
 import Requirement from "./pages/procurement/Requirement";
 import Procurement from "./pages/procurement/Procurement";
+import Manufacturing from "./pages/manufacturing/Manufacturing";
+import CRM from "./pages/CRM";
 function App() {
   return (
     <Routes>
@@ -37,6 +39,8 @@ function App() {
       <Route path="/purchase-orders" element={<ProtectedRoute role="admin"><PurchaseOrdersPage /></ProtectedRoute>} />
      <Route path="/procurement" element={<ProtectedRoute role="admin"><Procurement /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/manufacturing/*" element={<ProtectedRoute role="admin"><Manufacturing /></ProtectedRoute>} />
+      <Route path="/crm" element={<ProtectedRoute role="admin"><CRM /></ProtectedRoute>} />
     </Routes>
   );
 }
