@@ -1,55 +1,59 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import { db } from "../../config/firebase";
-import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { AuthContext } from "../../routes/AuthProvider"; // AuthContext zaroori hai
+import { collection, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
+import { AuthContext } from "../../routes/AuthProvider";
 import Select from "react-select";
-import { Plus, Trash2, Save, ListChecks } from "lucide-react";
+import { Plus, Trash2, Save, ListChecks, Package, ArrowRight, Calculator } from "lucide-react";
 import toast from "react-hot-toast";
 
 const BOM = () => {
-  const { user } = useContext(AuthContext); // Current login user ki details
+  const { user } = useContext(AuthContext);
   const userId = user?.uid;
 
   const [products, setProducts] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
+  const [savedBoms, setSavedBoms] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [recipe, setRecipe] = useState([{ materialId: "", quantity: 1, name: "" }]);
+  const [recipe, setRecipe] = useState([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchAllData = async () => {
-      if (!userId) return;
+  const fetchAllData = async () => {
+    if (!userId) return;
+    try {
+      const prodSnap = await getDocs(collection(db, "inventory"));
+      const prodList = prodSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(i => i.type === "Finished Good")
+        .map(i => ({ value: i.id, label: i.name }));
+      setProducts(prodList);
 
-      try {
-        // 1. Fetch Products (Finished Goods) from main 'inventory' collection
-        const prodSnap = await getDocs(collection(db, "inventory"));
-        const prodList = prodSnap.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(i => i.type === "Finished Good")
-          .map(i => ({ value: i.id, label: i.name }));
-        setProducts(prodList);
+      const stockRef = collection(db, "users", userId, "stocks");
+      const stockSnap = await getDocs(stockRef);
+      const matList = stockSnap.docs.map(doc => ({
+        value: doc.id,
+        label: `${doc.data().itemid} - ${doc.data().name} (₹${doc.data().actualPrice || 0})`,
+        name: doc.data().name,
+        itemid: doc.data().itemid,
+        price: doc.data().actualPrice || 0 // Price yahan fetch ho raha hai
+      }));
+      setRawMaterials(matList);
 
-        // 2. Fetch Raw Materials from 'users/userId/stocks' (As per your AddStock.jsx)
-        const stockRef = collection(db, "users", userId, "stocks");
-        const stockSnap = await getDocs(stockRef);
-        const matList = stockSnap.docs.map(doc => ({
-          value: doc.id, // Firestore Document ID
-          label: `${doc.data().itemid} - ${doc.data().name}`, // Part No + Name
-          name: doc.data().name,
-          unit: doc.data().unit
-        }));
-        setRawMaterials(matList);
+      const bomSnap = await getDocs(collection(db, "boms"));
+      setSavedBoms(bomSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      toast.error("Data load karne mein error aaya");
+    }
+  };
 
-      } catch (error) {
-        console.error("Fetch Error:", error);
-        toast.error("Stock data load nahi ho paya");
-      }
-    };
+  useEffect(() => { fetchAllData(); }, [userId]);
 
-    fetchAllData();
-  }, [userId]);
+  // Real-time Cost Calculation
+  const totalEstimateCost = useMemo(() => {
+    return recipe.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price || 0)), 0);
+  }, [recipe]);
 
   const addIngredient = () => {
-    setRecipe([...recipe, { materialId: "", quantity: 1, name: "" }]);
+    setRecipe([...recipe, { materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
   };
 
   const removeIngredient = (index) => {
@@ -58,130 +62,134 @@ const BOM = () => {
 
   const handleSaveBOM = async () => {
     if (!selectedProduct || recipe.some(r => !r.materialId)) {
-      toast.error("Product aur saare Materials select karein");
-      return;
+      return toast.error("Product aur saare Materials select karein");
     }
-
+    setLoading(true);
     try {
       await addDoc(collection(db, "boms"), {
         productId: selectedProduct.value,
         productName: selectedProduct.label,
         ingredients: recipe,
+        totalEstimatedCost: totalEstimateCost,
         createdBy: userId,
         createdAt: serverTimestamp()
       });
-      toast.success("BOM Recipe save ho gayi!");
-      setRecipe([{ materialId: "", quantity: 1, name: "" }]);
+      toast.success("BOM successfully save ho gaya!");
+      setRecipe([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
       setSelectedProduct(null);
+      fetchAllData();
     } catch (error) {
-      toast.error("BOM save karne mein error aaya");
+      toast.error("BOM save nahi ho paya");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-3 bg-indigo-600/20 rounded-2xl">
-            <ListChecks className="text-indigo-400" size={28} />
-          </div>
-          <h2 className="text-2xl font-bold text-white">Bill of Materials Builder</h2>
-        </div>
-        
-        {/* Product Selection */}
-        <div className="mb-10 bg-slate-800/20 p-6 rounded-3xl border border-slate-800">
-          <label className="block text-slate-400 text-xs uppercase font-black tracking-widest mb-3 px-1">Select Target Product</label>
-          <Select
-            options={products}
-            onChange={setSelectedProduct}
-            value={selectedProduct}
-            placeholder="Search finished goods..."
-            styles={darkSelectStyles}
-          />
-        </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-8 text-left">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl sticky top-6">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-400">
+              <ListChecks size={24} /> BOM Builder
+            </h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-black mb-2 block">Finished Product</label>
+                <Select options={products} onChange={setSelectedProduct} value={selectedProduct} styles={darkSelectStyles} />
+              </div>
 
-        {/* Ingredients Section */}
-        <div className="space-y-4">
-          <label className="block text-slate-400 text-xs uppercase font-black tracking-widest mb-1 px-1">Raw Materials Needed</label>
-          {recipe.map((item, index) => (
-            <div key={index} className="flex gap-4 items-center bg-slate-800/40 p-4 rounded-2xl border border-slate-800 transition-all hover:border-slate-700">
-              <div className="flex-1">
-                <Select
-                  options={rawMaterials}
-                  onChange={(opt) => {
-                    const newRecipe = [...recipe];
-                    newRecipe[index].materialId = opt.value;
-                    newRecipe[index].name = opt.name;
-                    setRecipe(newRecipe);
-                  }}
-                  placeholder="Select material (Part No)..."
-                  styles={darkSelectStyles}
-                />
+              <div className="space-y-3">
+                <label className="text-[10px] text-slate-400 uppercase font-black mb-1 block">Materials & Qty</label>
+                {recipe.map((item, index) => (
+                  <div key={index} className="space-y-2 bg-slate-800/30 p-3 rounded-2xl border border-slate-800">
+                    <Select
+                      options={rawMaterials}
+                      onChange={(opt) => {
+                        const newRecipe = [...recipe];
+                        newRecipe[index].materialId = opt.value;
+                        newRecipe[index].name = opt.name;
+                        newRecipe[index].itemid = opt.itemid;
+                        newRecipe[index].price = opt.price;
+                        setRecipe(newRecipe);
+                      }}
+                      styles={darkSelectStyles}
+                    />
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const newRecipe = [...recipe];
+                          newRecipe[index].quantity = e.target.value;
+                          setRecipe(newRecipe);
+                        }}
+                        className="w-20 bg-slate-900 border border-slate-700 text-white p-2 rounded-xl text-xs font-bold"
+                      />
+                      <span className="text-[10px] font-bold text-emerald-500">₹{(item.quantity * item.price).toLocaleString()}</span>
+                      <button onClick={() => removeIngredient(index)} className="ml-auto text-red-500 hover:bg-red-500/10 p-1 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center bg-slate-900 rounded-xl px-4 border border-slate-700 h-[42px]">
-                <input
-                  type="number"
-                  min="1"
-                  value={item.quantity}
-                  onChange={(e) => {
-                    const newRecipe = [...recipe];
-                    newRecipe[index].quantity = e.target.value;
-                    setRecipe(newRecipe);
-                  }}
-                  className="w-16 bg-transparent text-white font-bold outline-none text-center"
-                />
-                <span className="text-slate-500 text-[10px] font-black uppercase ml-2">Qty</span>
+
+              {/* Summary Section */}
+              <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Cost Per Product</span>
+                  <span className="text-lg font-black text-white">₹{totalEstimateCost.toLocaleString()}</span>
+                </div>
               </div>
-              <button onClick={() => removeIngredient(index)} className="p-2 text-slate-600 hover:text-red-500 transition-colors">
-                <Trash2 size={20} />
+
+              <button onClick={addIngredient} className="w-full py-3 border-2 border-dashed border-slate-800 rounded-2xl text-slate-500 text-xs font-bold hover:border-indigo-500">
+                + Add Material
+              </button>
+
+              <button onClick={handleSaveBOM} disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs">
+                {loading ? "Saving..." : "Save BOM"}
               </button>
             </div>
-          ))}
+          </div>
         </div>
 
-        <div className="mt-10 flex justify-between items-center border-t border-slate-800 pt-8">
-          <button
-            onClick={addIngredient}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-800 text-white rounded-2xl hover:bg-slate-700 transition-all font-bold"
-          >
-            <Plus size={18} /> Add Material
-          </button>
-          
-          <button
-            onClick={handleSaveBOM}
-            className="flex items-center gap-2 px-12 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-500 font-black transition-all shadow-xl shadow-indigo-600/20 uppercase tracking-widest"
-          >
-            <Save size={20} /> Save BOM
-          </button>
+        <div className="lg:col-span-2">
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Package className="text-indigo-400" /> Existing BOMs</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {savedBoms.map((bom) => (
+              <div key={bom.id} className="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="text-lg font-bold text-white leading-tight">{bom.productName}</h4>
+                    <p className="text-[10px] font-black text-emerald-500 uppercase mt-1">Cost: ₹{bom.totalEstimatedCost?.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {bom.ingredients.map((ing, i) => (
+                    <div key={i} className="flex justify-between items-center bg-slate-800/40 px-3 py-1.5 rounded-xl text-[10px]">
+                      <span className="text-slate-300">{ing.name}</span>
+                      <span className="text-white font-black">{ing.quantity} pcs</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// Custom Styles for React Select
 const darkSelectStyles = {
-  control: (base) => ({
-    ...base,
-    background: "#0f172a",
-    borderColor: "#1e293b",
-    borderRadius: "1rem",
-    padding: "4px",
-    color: "white",
-    boxShadow: "none",
-    '&:hover': { borderColor: '#4f46e5' }
-  }),
-  menu: (base) => ({ ...base, background: "#0f172a", borderRadius: "1rem", border: "1px solid #1e293b" }),
-  option: (base, state) => ({
-    ...base,
-    background: state.isFocused ? "#4f46e5" : "transparent",
-    color: "white",
-    cursor: "pointer",
-    fontSize: "0.875rem"
-  }),
+  control: (base) => ({ ...base, background: "#0f172a", borderColor: "#1e293b", borderRadius: "0.75rem", color: "white" }),
+  menu: (base) => ({ ...base, background: "#0f172a" }),
+  option: (base, state) => ({ ...base, background: state.isFocused ? "#4f46e5" : "transparent", color: "white", fontSize: "0.75rem" }),
   singleValue: (base) => ({ ...base, color: "white" }),
-  input: (base) => ({ ...base, color: "white" }),
-  placeholder: (base) => ({ ...base, color: "#64748b" })
+  placeholder: (base) => ({ ...base, color: "#64748b", fontSize: "0.75rem" })
 };
 
 export default BOM;

@@ -54,7 +54,7 @@ const ProductManagement = () => {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Input Form Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-8">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-8 text-left">
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
           <PackagePlus className="text-indigo-400" /> Register Finalized Product
         </h2>
@@ -63,7 +63,7 @@ const ProductManagement = () => {
             <input 
               type="text" 
               placeholder="Product Name (e.g. Office Chair)" 
-              className="w-full bg-slate-800 border border-slate-700 text-white p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              className="w-full bg-slate-800 border border-slate-700 text-white p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
             />
@@ -72,14 +72,14 @@ const ProductManagement = () => {
             <input 
               type="text" 
               placeholder="Category" 
-              className="w-full bg-slate-800 border border-slate-700 text-white p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              className="w-full bg-slate-800 border border-slate-700 text-white p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             />
           </div>
           <button 
             disabled={loading}
-            className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+            className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 uppercase text-xs tracking-widest"
           >
             {loading ? <Loader2 className="animate-spin" size={20}/> : "Add Product"}
           </button>
@@ -90,35 +90,35 @@ const ProductManagement = () => {
       </div>
 
       {/* Product List Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden text-left">
         <div className="p-4 border-b border-slate-800 flex items-center gap-2">
           <List size={18} className="text-indigo-400" />
-          <h3 className="font-bold text-white">Registered Finished Goods</h3>
+          <h3 className="font-bold text-white uppercase text-xs tracking-widest">Registered Finished Goods</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider">
+            <thead className="bg-slate-800/50 text-slate-400 text-[10px] uppercase tracking-widest font-black">
               <tr>
-                <th className="p-4 font-bold">Product Name</th>
-                <th className="p-4 font-bold">Category</th>
-                <th className="p-4 font-bold text-center">Current Stock</th>
-                <th className="p-4 font-bold text-right">Status</th>
+                <th className="p-4">Product Name</th>
+                <th className="p-4">Category</th>
+                <th className="p-4 text-center">Current Stock</th>
+                <th className="p-4 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="text-slate-300 divide-y divide-slate-800">
               {products.length > 0 ? (
                 products.map(p => (
                   <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-4 font-semibold text-white">{p.name}</td>
+                    <td className="p-4 font-bold text-white">{p.name}</td>
                     <td className="p-4">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-xs font-semibold">
                         <Tag size={14} className="text-slate-500" />
                         {p.category}
                       </span>
                     </td>
-                    <td className="p-4 text-center font-mono">{p.stock} units</td>
+                    <td className="p-4 text-center font-black">{p.stock} units</td>
                     <td className="p-4 text-right">
-                      <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-1 rounded-md border border-emerald-500/20 font-bold">
+                      <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-1 rounded-md border border-emerald-500/20 font-black uppercase tracking-tighter">
                         ACTIVE
                       </span>
                     </td>
@@ -126,7 +126,7 @@ const ProductManagement = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="p-8 text-center text-slate-500">
+                  <td colSpan="4" className="p-12 text-center text-slate-500 font-bold italic">
                     Koi products nahi hain. Naya product add karein!
                   </td>
                 </tr>

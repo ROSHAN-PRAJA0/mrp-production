@@ -66,8 +66,10 @@ export default function Sidebar() {
 
   return (
     <div className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-slate-300 flex flex-col z-50 shadow-2xl">
-      <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-        <span className="text-xl font-bold text-white italic">
+      <div className="p-6 flex items-center gap-3 border-b border-slate-800"><div className="bg-white p-1 rounded-md flex-shrink-0">
+                 <img src="/logo.png" alt="Shop Logo" className="h-8 w-8" />
+              </div>
+        <span className="text-xl font-bold text-white ">
           Smart<span className="text-indigo-400">MRP</span>
         </span>
       </div>
