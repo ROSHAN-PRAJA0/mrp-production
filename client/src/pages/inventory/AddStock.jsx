@@ -96,8 +96,7 @@ const AddStock = () => {
     const toastId = toast.loading("Updating inventory and recording movements...");
 
     try {
-      const validItems = stockItems.filter(item => item.itemid && item.quantity > 0);
-
+      const validItems = stockItems.filter(item => item.itemid !== "");
       for (const item of validItems) {
         const stockRef = collection(db, "users", userId, "stocks");
         const q = query(stockRef, where("itemid", "==", item.itemid));
@@ -115,7 +114,7 @@ const AddStock = () => {
         } else {
           await addDoc(stockRef, {
             ...item,
-            quantity: Number(item.quantity),
+            quantity: Number(item.quantity) || 0,
             actualPrice: Number(item.actualPrice),
             addedAt: serverTimestamp(),
           });
@@ -125,7 +124,7 @@ const AddStock = () => {
           itemid: item.itemid,
           name: item.name,
           type: "IN",
-          quantity: Number(item.quantity),
+          quantity: increment(Number(item.quantity) || 0),
           reason: "Raw Material Intake",
           timestamp: serverTimestamp(),
           user: user.email

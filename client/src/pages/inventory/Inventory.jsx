@@ -80,8 +80,6 @@ export default function InventoryMaster() {
   const tabs = [
     { name: "Inventory Dashboard", icon: <LayoutDashboard size={14} /> },
     { name: "Stock Levels", icon: <Package size={14} /> },
-    { name: "Product Alerts", icon: <AlertTriangle size={14} /> },
-   
     { name: "Finished Goods Stock", icon: <CheckCircle size={14} /> },
     { name: "Stock Movements", icon: <RefreshCcw size={14} /> },
   ];
