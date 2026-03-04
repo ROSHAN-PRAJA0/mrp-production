@@ -9,10 +9,10 @@ import {
   Activity, 
   AlertTriangle,
   Factory,
-  CheckCircle2,
   Clock,
   DollarSign,
-  BarChart3
+  BarChart3,
+  ShoppingCart
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
@@ -21,70 +21,81 @@ import {
 export default function AdminDashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [stats, setStats] = useState({
-    totalRawMaterialCost: 0,
-    estimatedRevenue: 0,
-    netProfit: 0,
+    stockValue: 0,        // Total value of items currently in warehouse
+    realizedProfit: 0,    // Actual profit from items sold (OUT movements)
+    totalSales: 0,        // Revenue from sales dispatches
     activeOrders: 0,
     lowStockAlerts: 0,
     completedToday: 0
   });
   const [recentMovements, setRecentMovements] = useState([]);
-  const [forecastSummary, setForecastSummary] = useState([]);
+  const [forecastSummary, setForecastSummary] = useState(0);
 
   useEffect(() => {
     if (!user.uid) return;
 
-    // ✅ Combined Financial Logic: Revenue, Cost & Profit
+    // 1. Stock Inventory Logic (Warehouse Assets)
     const unsubStocks = onSnapshot(collection(db, "users", user.uid, "stocks"), (snap) => {
       const items = snap.docs.map(d => d.data());
-      
-      let rawMaterialCost = 0;
-      let finishedGoodsRevenue = 0;
+      let currentStockValue = 0;
       let alerts = 0;
 
       items.forEach(item => {
         const qty = Number(item.quantity || 0);
-        if (item.category === "Finished Goods") {
-          // Finished Goods ki value selling price (MRP) se calculate hogi
-          finishedGoodsRevenue += (qty * Number(item.sellingPrice || 0));
-        } else {
-          // Raw Material ki value actual purchase price se calculate hogi
-          rawMaterialCost += (qty * Number(item.actualPrice || 0));
-          if (qty < 100) alerts++;
+        // Inventory value calculation (Raw Material or Finished Goods)
+        currentStockValue += (qty * Number(item.actualPrice || 0));
+        if (qty < 100) alerts++;
+      });
+
+      setStats(prev => ({ 
+        ...prev, 
+        stockValue: currentStockValue,
+        lowStockAlerts: alerts 
+      }));
+    });
+
+    // 2. Realized Profit & Sales Logic (Based on Movements)
+    const unsubMovements = onSnapshot(collection(db, "users", user.uid, "movements"), (snap) => {
+      const moves = snap.docs.map(d => d.data());
+      let totalSales = 0;
+      let realizedProfit = 0;
+
+      moves.forEach(m => {
+        // Hum sirf "OUT" aur "Sales Dispatch" transactions ko count karenge
+        if (m.type === "OUT" && m.reason?.includes("Sales")) {
+          const qty = Number(m.quantity || 0);
+          const salePrice = Number(m.sellingPrice || 0);
+          const costPrice = Number(m.costPrice || 0);
+
+          totalSales += (qty * salePrice);
+          realizedProfit += (qty * (salePrice - costPrice));
         }
       });
 
       setStats(prev => ({ 
         ...prev, 
-        totalRawMaterialCost: rawMaterialCost,
-        estimatedRevenue: finishedGoodsRevenue,
-        netProfit: finishedGoodsRevenue - rawMaterialCost, // Profit = Revenue - Cost
-        lowStockAlerts: alerts 
+        totalSales: totalSales,
+        realizedProfit: realizedProfit 
       }));
+      setRecentMovements(snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // Live Manufacturing Orders
+    // 3. Manufacturing Orders Stats
     const unsubOrders = onSnapshot(collection(db, "manufacturing_orders"), (snap) => {
       const orders = snap.docs.map(d => d.data());
-      const active = orders.filter(o => o.status === "In-Progress" || o.status === "Planned").length;
+      const active = orders.filter(o => ["In-Progress", "Planned", "Rework Required"].includes(o.status)).length;
       const completed = orders.filter(o => o.status === "Completed").length;
       setStats(prev => ({ ...prev, activeOrders: active, completedToday: completed }));
     });
 
-    // Recent Movements
-    const qMovements = query(collection(db, "users", user.uid, "movements"), orderBy("timestamp", "desc"), limit(5));
-    const unsubMove = onSnapshot(qMovements, (snap) => {
-      setRecentMovements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    // Simple Forecasting Summary for Dashboard
+    // 4. CRM Inquiry Forecast
     const fetchForecast = async () => {
       const crmSnap = await getDocs(collection(db, "customer_requests"));
-      setForecastSummary(crmSnap.docs.length); // Kitne inquiries pending hain
+      setForecastSummary(crmSnap.docs.length);
     };
     fetchForecast();
 
-    return () => { unsubStocks(); unsubOrders(); unsubMove(); };
+    return () => { unsubStocks(); unsubMovements(); unsubOrders(); };
   }, [user.uid]);
 
   return (
@@ -94,62 +105,56 @@ export default function AdminDashboard() {
         <Topbar />
         
         <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-          {/* Welcome Header */}
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-3xl font-black text-slate-900 tracking-tight italic">
                 {user.name || "Admin"}'s Command Center
               </h2>
-              <p className="text-slate-500 font-medium">Real-time Financial & Production Intelligence.</p>
+              <p className="text-slate-500 font-medium">Actual Sales Profit & Production Intelligence.</p>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest">
-              <Activity size={14} className="animate-pulse" /> System Active
+              <Activity size={14} className="animate-pulse" /> Live Stats
             </div>
           </div>
 
-          {/* ✅ New Financial Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <MetricCard 
-              title="Raw Material Value" 
-              value={`₹${stats.totalRawMaterialCost.toLocaleString()}`} 
+              title="Realized Profit" 
+              value={`₹${stats.realizedProfit.toLocaleString()}`} 
+              icon={<DollarSign />} 
+              trend="Actual Earnings" 
+              color="emerald" 
+            />
+            <MetricCard 
+              title="Sales Revenue" 
+              value={`₹${stats.totalSales.toLocaleString()}`} 
+              icon={<ShoppingCart />} 
+              trend="Total Invoiced" 
+              color="blue" 
+            />
+             <MetricCard 
+              title="Stock Asset Value" 
+              value={`₹${stats.stockValue.toLocaleString()}`} 
               icon={<Package />} 
-              trend="Current Assets" 
+              trend="Warehouse Assets" 
               color="indigo" 
             />
             <MetricCard 
-              title="Estimated Revenue" 
-              value={`₹${stats.estimatedRevenue.toLocaleString()}`} 
-              icon={<TrendingUp />} 
-              trend="Market Value" 
-              color="blue" 
-            />
-            <MetricCard 
-              title="Net Profit" 
-              value={`₹${stats.netProfit.toLocaleString()}`} 
-              icon={<DollarSign />} 
-              trend={stats.netProfit >= 0 ? "Surplus" : "Deficit"} 
-              color={stats.netProfit >= 0 ? "emerald" : "red"} 
-            />
-            <MetricCard 
-              title="Active Production" 
+              title="Production Load" 
               value={stats.activeOrders} 
               icon={<Factory />} 
-              trend={`${forecastSummary} CRM Needs`} 
+              trend={`${forecastSummary} New Inquiries`} 
               color="orange" 
             />
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Efficiency Chart */}
             <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
                   <BarChart3 className="text-indigo-600" size={20}/> 
-                  Output Performance
+                  Operational Efficiency
                 </h3>
-                <div className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                  Live Analytics
-                </div>
               </div>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -157,18 +162,17 @@ export default function AdminDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                    <Tooltip cursor={{fill: '#f8fafc'}} />
                     <Bar dataKey="output" fill="#6366f1" radius={[10, 10, 0, 0]} barSize={35} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Recent Activity Ledger */}
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
               <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 uppercase tracking-tighter">
                 <Clock className="text-indigo-600" size={20}/> 
-                Live Activity
+                Recent Movements
               </h3>
               <div className="space-y-4">
                 {recentMovements.map((move) => (
@@ -180,7 +184,7 @@ export default function AdminDashboard() {
                     <span className={`text-[9px] font-black px-2 py-1 rounded-lg ${
                       move.type === "IN" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"
                     }`}>
-                      {move.type === "IN" ? "+ STOCK" : "- STOCK"}
+                      {move.reason?.includes("Sales") ? "SALE" : move.type}
                     </span>
                   </div>
                 ))}
@@ -210,9 +214,6 @@ function MetricCard({ title, value, icon, trend, color }) {
         <h4 className="text-2xl font-black italic">{value}</h4>
       </div>
       <div className="text-[9px] font-black uppercase tracking-tighter bg-white/50 w-fit px-2 py-1 rounded-lg z-10">{trend}</div>
-      <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-        {React.cloneElement(icon, { size: 100 })}
-      </div>
     </div>
   );
 }

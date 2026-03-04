@@ -10,6 +10,7 @@ import AddStock from "./pages/inventory/AddStock";
 import ProductAlerts from "./pages/inventory/ProductAlerts";
 import StockMovements from "./pages/inventory/StockMovements";
 import InventoryItems from "./pages/inventory/InventoryItems";
+import Dispatch from "./pages/inventory/Dispatch";
 
 import Procurement from "./pages/procurement/Procurement";
 import PurchaseOrdersPage from "./pages/procurement/PurchaseOrders";
@@ -90,6 +91,14 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/dispatch"
+  element={
+    <ProtectedRoute allowedRoles={["admin", "manager"]}>
+      <Dispatch />
+    </ProtectedRoute>
+  }
+/>
 
       {/* Procurement */}
       <Route

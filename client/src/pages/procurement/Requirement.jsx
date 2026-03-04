@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext, useMemo } from "react";
 import { db } from "../../config/firebase";
-import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { AuthContext } from "../../routes/AuthProvider";
-import { ClipboardList, AlertCircle, ShoppingCart, PackageCheck, RefreshCw } from "lucide-react";
+import { ClipboardList, AlertCircle, ShoppingCart, PackageCheck, RefreshCw, ArrowRight, Truck } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function Requirement() {
@@ -26,7 +26,7 @@ export default function Requirement() {
       setOrders(orderSnap.docs.map(d => d.data()));
       setLoading(false);
     } catch (err) {
-      toast.error("Sync failed");
+      toast.error("Supply Chain Sync Failed");
       setLoading(false);
     }
   };
@@ -35,8 +35,8 @@ export default function Requirement() {
 
   const requirementReport = useMemo(() => {
     const report = {};
-    // Sirf 'Planned' orders ki requirements nikalna
-    orders.filter(o => o.status === "Planned").forEach(order => {
+    // Filtering Planned and Rework orders for material calculation
+    orders.filter(o => ["Planned", "Rework Required"].includes(o.status)).forEach(order => {
       const productBOM = bomData.find(b => b.productId === order.productId);
       if (productBOM) {
         productBOM.ingredients.forEach(ing => {
@@ -49,7 +49,8 @@ export default function Requirement() {
               itemid: ing.itemid, 
               currentStock: Number(currentStock?.quantity || 0), 
               grossRequired: 0, 
-              id: key // Ye Inventory Doc ID hai
+              id: key,
+              preferredSupplier: productBOM.preferredSupplier || "Market Source" // BOM se supplier uthana
             };
           }
           report[key].grossRequired += grossRequired;
@@ -64,113 +65,119 @@ export default function Requirement() {
     }));
   }, [orders, bomData, stocks]);
 
-  // ✅ Updated Integration: Shortage ko Purchase Order mein convert karna
   const handleConvertToPO = async (item) => {
-    const toastId = toast.loading(`Creating Purchase Order for ${item.name}...`);
+    const toastId = toast.loading(`Drafting PO for ${item.name}...`);
     try {
       await addDoc(collection(db, "reorders"), {
         adminUID: user.uid,
-        itemid: item.id, // ✅ IMPORTANT: Inventory Doc ID bhej rahe hain taaki baad mein stock update ho sake
+        itemid: item.id,
         name: item.name,
         requestedQty: item.netRequirement,
         status: 'pending',
-        supplierName: "Manual/Requirement Hub",
+        supplierName: item.preferredSupplier,
+        source: "MRP Auto-Requirement",
         createdAt: serverTimestamp()
       });
       
-      toast.success("Shortage moved to Purchase Orders list!", { id: toastId });
-      // Data refresh karein taaki updated view dikhe
+      toast.success("Added to Procurement Queue!", { id: toastId });
       fetchData();
     } catch (err) {
-      console.error(err);
-      toast.error("Automation error: Failed to create PO", { id: toastId });
+      toast.error("Automation error: PO creation failed", { id: toastId });
     }
   };
 
   if (loading) return (
     <div className="p-20 text-center flex flex-col items-center justify-center gap-4">
       <RefreshCw className="animate-spin text-indigo-600" size={40} />
-      <p className="font-black text-slate-400 uppercase tracking-widest italic">Analyzing Supply Chain...</p>
+      <p className="font-black text-slate-400 uppercase tracking-widest italic">Calculating Material Demand...</p>
     </div>
   );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 text-left">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center gap-3">
-          <ClipboardList className="text-indigo-600" /> MRP Requirement Matrix
-        </h2>
-        <button 
-          onClick={fetchData} 
-          className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
-          title="Refresh Data"
-        >
-          <RefreshCw size={20} />
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center gap-3">
+            <ClipboardList className="text-indigo-600" /> MRP Matrix
+          </h2>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Material Requirement Planning based on Planned Orders</p>
+        </div>
+        <button onClick={fetchData} className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-500 transition-all border border-slate-100 shadow-sm">
+          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-red-50 p-8 rounded-[2.5rem] border border-red-100 flex justify-between items-center shadow-sm">
-          <div>
-            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Active Shortages</p>
-            <h4 className="text-3xl font-black text-red-700">
-              {requirementReport.filter(r => r.netRequirement > 0).length} Items
-            </h4>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Items at Risk</p>
+          <div className="flex justify-between items-end">
+            <h4 className="text-3xl font-black text-red-600">{requirementReport.filter(r => r.netRequirement > 0).length}</h4>
+            <AlertCircle className="text-red-200" size={32} />
           </div>
-          <AlertCircle className="text-red-600" size={36} />
         </div>
-        <div className="bg-emerald-50 p-8 rounded-[2.5rem] border border-emerald-100 flex justify-between items-center shadow-sm">
-          <div>
-            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Stock Ready</p>
-            <h4 className="text-3xl font-black text-emerald-700">
-              {requirementReport.filter(r => r.netRequirement === 0).length} Items
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Demand</p>
+          <div className="flex justify-between items-end">
+            <h4 className="text-3xl font-black text-indigo-600">
+              {requirementReport.reduce((acc, curr) => acc + curr.grossRequired, 0)} <span className="text-sm">Units</span>
             </h4>
+            <ShoppingCart className="text-indigo-200" size={32} />
           </div>
-          <PackageCheck className="text-emerald-600" size={36} />
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ready to Start</p>
+          <div className="flex justify-between items-end">
+            <h4 className="text-3xl font-black text-emerald-600">{requirementReport.filter(r => r.netRequirement === 0).length}</h4>
+            <PackageCheck className="text-emerald-200" size={32} />
+          </div>
         </div>
       </div>
 
-      {/* Requirement Table */}
       <div className="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b text-[10px] uppercase font-black text-slate-400 tracking-widest">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50/50 border-b text-[10px] uppercase font-black text-slate-400 tracking-widest">
             <tr>
-              <th className="px-8 py-5">Component</th>
-              <th className="px-8 py-5 text-center">In-House</th>
-              <th className="px-8 py-5 text-center">Gross Demand</th>
-              <th className="px-8 py-5 text-center">Gap</th>
-              <th className="px-8 py-5 text-right">Procure</th>
+              <th className="px-8 py-6">Material Component</th>
+              <th className="px-8 py-6 text-center">On-Hand</th>
+              <th className="px-8 py-6 text-center">Gross Demand</th>
+              <th className="px-8 py-6 text-center">Status / Gap</th>
+              <th className="px-8 py-6 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {requirementReport.length > 0 ? (
               requirementReport.map((item, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-all group">
+                <tr key={idx} className="hover:bg-slate-50/30 transition-all">
                   <td className="px-8 py-5">
                     <p className="font-bold text-slate-800">{item.name}</p>
-                    <p className="text-[10px] text-indigo-500 font-black italic">SKU: {item.itemid}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Truck size={10} className="text-slate-400" />
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">Vendor: {item.preferredSupplier}</p>
+                    </div>
                   </td>
                   <td className="px-8 py-5 text-center font-bold text-slate-500">{item.currentStock}</td>
                   <td className="px-8 py-5 text-center font-bold text-slate-900">{item.grossRequired}</td>
                   <td className="px-8 py-5 text-center">
                     {item.netRequirement > 0 ? (
-                      <span className="bg-red-100 text-red-700 px-3 py-1 rounded-xl text-[9px] font-black uppercase italic">
-                        -{item.netRequirement} Unit Shortage
-                      </span>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="bg-red-50 text-red-600 px-3 py-1 rounded-xl text-[9px] font-black uppercase italic border border-red-100">
+                          Shortage: {item.netRequirement}
+                        </span>
+                      </div>
                     ) : (
-                      <span className="text-emerald-500 text-[9px] font-black uppercase">Sufficient</span>
+                      <span className="text-emerald-500 text-[9px] font-black uppercase flex items-center justify-center gap-1">
+                        <PackageCheck size={12} /> Adequate
+                      </span>
                     )}
                   </td>
                   <td className="px-8 py-5 text-right">
                     {item.netRequirement > 0 && (
                       <button 
                         onClick={() => handleConvertToPO(item)} 
-                        className="bg-slate-900 text-white p-3 rounded-2xl hover:bg-indigo-600 transition-all shadow-md group-hover:scale-105 flex items-center gap-2 ml-auto"
-                        title="Move to Purchase Orders"
+                        className="bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-600 transition-all shadow-sm flex items-center gap-2 ml-auto group"
                       >
-                        <ShoppingCart size={16} />
-                        <span className="text-[10px] font-black uppercase">Order</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Procure</span>
+                        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                       </button>
                     )}
                   </td>
@@ -178,8 +185,11 @@ export default function Requirement() {
               ))
             ) : (
               <tr>
-                <td colSpan="5" className="p-20 text-center text-slate-400 font-bold italic">
-                  No planned orders found. No material requirements to display.
+                <td colSpan="5" className="p-24 text-center">
+                  <div className="flex flex-col items-center opacity-20">
+                    <ClipboardList size={48} className="mb-2" />
+                    <p className="font-black uppercase tracking-[0.2em] text-sm italic">Clear - No Material Shortages</p>
+                  </div>
                 </td>
               </tr>
             )}

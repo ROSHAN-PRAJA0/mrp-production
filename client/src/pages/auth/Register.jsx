@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { Factory, Eye, EyeOff, ShieldCheck } from "lucide-react"; // Removed unused CheckCircle2
+import { Factory, Eye, EyeOff, ShieldCheck, Mail, User, Building2, Users as UsersIcon } from "lucide-react";
 import { auth, db } from "../../config/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion"; // Install: npm install framer-motion
+import toast from "react-hot-toast"; // Install: npm install react-hot-toast
 
 export default function Register() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false); // Added loading state for better UX
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     company: "",
@@ -52,7 +54,13 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (passwordStrength.label === "Weak") {
+      return toast.error("Please use a stronger password.");
+    }
+
     setLoading(true);
+    const toastId = toast.loading("Creating your factory space...");
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const userData = {
@@ -62,23 +70,22 @@ export default function Register() {
         role: "admin",
         companySize: formData.companySize,
         email: formData.email,
-        createdAt: new Date()
+        createdAt: new Date().toISOString()
       };
 
       // 1. Save to Firestore
       await setDoc(doc(db, "users", userCredential.user.uid), userData);
 
-      // 2. IMPORTANT: Save to localStorage so ProtectedRoute works
+      // 2. Save to localStorage
       localStorage.setItem("user", JSON.stringify(userData));
 
-      alert("Registration Successful!");
+      toast.success("Welcome to SmartMRP!", { id: toastId });
       navigate("/admin-dashboard");
     } catch (error) {
-      // Handle Firebase specific errors like 'email-already-in-use'
       if (error.code === 'auth/email-already-in-use') {
-        alert("This email is already registered. Please Sign In.");
+        toast.error("This email is already registered.", { id: toastId });
       } else {
-        alert(error.message);
+        toast.error(error.message, { id: toastId });
       }
     } finally {
       setLoading(false);
@@ -86,78 +93,97 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4">
-      <div className="bg-white shadow-2xl rounded-[2rem] w-full max-w-xl p-8 md:p-12 border border-slate-100">
-        
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4 relative overflow-hidden">
+      {/* Dynamic Background Elements */}
+      <div className="absolute top-[-5%] right-[-5%] w-[35%] h-[35%] bg-indigo-100 rounded-full blur-[100px] opacity-60"></div>
+      <div className="absolute bottom-[-5%] left-[-5%] w-[35%] h-[35%] bg-blue-100 rounded-full blur-[100px] opacity-60"></div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 backdrop-blur-xl shadow-2xl rounded-[2.5rem] w-full max-w-xl p-8 md:p-12 border border-white relative z-10"
+      >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-10">
           <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="SmartStock Logo" className="h-9 w-9 rounded-md" />
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">
+            <img src="/logo.png" alt="SmartStock Logo" className="h-10 w-10 rounded-xl shadow-sm" />
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter ">
               Smart<span className="text-indigo-600">MRP</span>
             </h1>
           </div>
-          <p className="text-slate-500 font-medium">Create your admin account</p>
+          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-2">Enterprise Resource Planning</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid md:grid-cols-2 gap-5">
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Full Name</label>
-              <input
-                type="text"
-                name="name"
-                placeholder="John Doe"
-                className="w-full border-slate-200 border p-3.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                onChange={handleChange}
-                required
-              />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">Admin Name</label>
+              <div className="relative">
+                <User className="absolute left-4 top-4 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="John Doe"
+                  className="w-full bg-slate-50 border-slate-100 border p-4 pl-12 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Company Name</label>
-              <input
-                type="text"
-                name="company"
-                placeholder="Acme Corp"
-                className="w-full border-slate-200 border p-3.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-5">
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Email Address</label>
-              <input
-                type="email"
-                name="email"
-                placeholder="john@company.com"
-                className="w-full border-slate-200 border p-3.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Company Size</label>
-              <select
-                name="companySize"
-                className="w-full border-slate-200 border p-3.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select Size</option>
-                <option>1-10 employees</option>
-                <option>11-50 employees</option>
-                <option>50+ employees</option>
-              </select>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">Company Name</label>
+              <div className="relative">
+                <Building2 className="absolute left-4 top-4 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  name="company"
+                  placeholder="Acme Corp"
+                  className="w-full bg-slate-50 border-slate-100 border p-4 pl-12 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5 relative">
-            <label className="text-sm font-semibold text-slate-700 ml-1 flex justify-between">
-              Password
-              <span className={`text-[10px] uppercase tracking-wider font-bold ${passwordStrength.label === "Strong" ? "text-green-600" : "text-slate-400"}`}>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">Official Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-4 text-slate-400" size={18} />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="john@company.com"
+                  className="w-full bg-slate-50 border-slate-100 border p-4 pl-12 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">Team Size</label>
+              <div className="relative">
+                <UsersIcon className="absolute left-4 top-4 text-slate-400" size={18} />
+                <select
+                  name="companySize"
+                  className="w-full bg-slate-50 border-slate-100 border p-4 pl-12 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-600 appearance-none"
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select Size</option>
+                  <option>1-10 employees</option>
+                  <option>11-50 employees</option>
+                  <option>50+ employees</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1 flex justify-between">
+              Secure Password
+              <span className={`text-[10px] font-black uppercase ${passwordStrength.color.replace('bg-', 'text-')}`}>
                 {passwordStrength.label}
               </span>
             </label>
@@ -166,7 +192,7 @@ export default function Register() {
                 type={showPassword ? "text" : "password"}
                 name="password"
                 placeholder="••••••••"
-                className="w-full border-slate-200 border p-3.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all pr-12"
+                className="w-full bg-slate-50 border-slate-100 border p-4 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700 pr-12"
                 onChange={handleChange}
                 required
               />
@@ -178,32 +204,39 @@ export default function Register() {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            
+            {/* Strength Indicator */}
             <div className="h-1.5 w-full bg-slate-100 rounded-full mt-2 overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${passwordStrength.color}`} 
-                style={{ width: `${passwordStrength.score}%` }}
-              ></div>
+              <motion.div 
+                className={`h-full ${passwordStrength.color}`} 
+                initial={{ width: 0 }}
+                animate={{ width: `${passwordStrength.score}%` }}
+              />
             </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center space-x-2 mt-4 disabled:opacity-50"
+            className="w-full bg-indigo-600 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center space-x-3 mt-4 disabled:opacity-70 group"
           >
-            <ShieldCheck size={20} />
-            <span>{loading ? "Creating Account..." : "Create Admin Account"}</span>
+            {loading ? (
+               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <ShieldCheck size={18} />
+                <span>Initialize Admin Workspace</span>
+              </>
+            )}
           </button>
 
-          <p className="text-center text-sm text-slate-500 mt-6">
-            Already have an account?{" "}
-            <button type="button" onClick={() => navigate("/signin")} className="text-indigo-600 font-bold hover:underline">
+          <p className="text-center text-sm font-bold text-slate-500 mt-6">
+            Member already?{" "}
+            <button type="button" onClick={() => navigate("/signin")} className="text-indigo-600 font-black hover:underline underline-offset-4">
               Sign In
             </button>
           </p>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

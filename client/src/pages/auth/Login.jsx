@@ -3,7 +3,9 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../config/firebase";
 import { useNavigate } from "react-router-dom";
-import { Factory, Eye, EyeOff, LogIn, ShieldCheck } from "lucide-react";
+import { motion } from "framer-motion"; // npm install framer-motion
+import { Factory, Eye, EyeOff, LogIn, ShieldCheck, Mail, Lock } from "lucide-react";
+import toast from "react-hot-toast";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -14,8 +16,10 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    const toastId = toast.loading("Verifying credentials...");
 
     try {
+      // Firebase Authentication
       const userCredential = await signInWithEmailAndPassword(
         auth,
         form.email,
@@ -23,83 +27,96 @@ const Login = () => {
       );
 
       const user = userCredential.user;
-
       const userDoc = await getDoc(doc(db, "users", user.uid));
 
       if (!userDoc.exists()) {
-        alert("User record not found in database.");
+        toast.error("User record not found in database.", { id: toastId });
         return;
       }
 
       const userData = { uid: user.uid, ...userDoc.data() };
 
-      // ❗ Manager must be approved by admin
+      // Manager approval validation
       if (userData.role === "manager" && !userData.approved) {
-        alert("Manager account not approved by admin.");
+        toast.error("Manager account pending admin approval.", { id: toastId });
         return;
       }
 
-      // Save session
+      // Session management
       localStorage.setItem("user", JSON.stringify(userData));
+      toast.success(`Welcome back, ${userData.name}!`, { id: toastId });
 
-      const role = userData.role;
+      // Role-based redirection
+      const dashboardMap = {
+        admin: "/admin-dashboard",
+        manager: "/admin-dashboard",
+        supervisor: "/supervisor-dashboard",
+        operator: "/operator-dashboard"
+      };
 
-      if (role === "admin") navigate("/admin-dashboard");
-      else if (role === "manager") navigate("/admin-dashboard");
-      else if (role === "supervisor") navigate("/supervisor-dashboard");
-      else if (role === "operator") navigate("/operator-dashboard");
+      navigate(dashboardMap[userData.role] || "/");
 
     } catch (error) {
-      alert("Invalid credentials. Please try again.");
+      toast.error("Invalid email or password.", { id: toastId });
     } finally {
       setLoading(false);
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4 relative overflow-hidden">
-      {/* Background Decorative Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-100 rounded-full blur-[120px] opacity-50"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-100 rounded-full blur-[120px] opacity-50"></div>
+      {/* Dynamic Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-indigo-100 rounded-full blur-[130px] opacity-60 animate-pulse"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-blue-100 rounded-full blur-[130px] opacity-60 animate-pulse"></div>
 
-      <div className="bg-white/80 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[2.5rem] w-full max-w-md p-10 border border-white relative z-10">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="bg-white/70 backdrop-blur-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[3rem] w-full max-w-md p-10 border border-white/50 relative z-10"
+      >
         
-        {/* Logo Section */}
-        <div className="flex flex-col items-center mb-10">
+        {/* Header Section */}
+        <div className="flex flex-col items-center mb-10 text-center">
           <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="SmartStock Logo" className="h-9 w-9 rounded-md" />
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">
+            <img src="/logo.png" alt="SmartStock Logo" className="h-10 w-10 rounded-xl shadow-sm" />
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter ">
               Smart<span className="text-indigo-600">MRP</span>
             </h1>
           </div>
-          <p className="text-slate-500 font-medium text-sm">Welcome back! Please enter your details.</p>
+          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-2">Secure Terminal Access</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          {/* Email Field */}
+          {/* Email Input */}
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 ml-1">Email Address</label>
-            <input
-              type="email"
-              placeholder="name@company.com"
-              required
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full p-4 border-slate-200 border rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 text-slate-600 font-medium"
-            />
+            <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">Corporate Email</label>
+            <div className="relative group">
+              <Mail className="absolute left-4 top-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
+              <input
+                type="email"
+                placeholder="name@company.com"
+                required
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full p-4 pl-12 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
+              />
+            </div>
           </div>
 
-          {/* Password Field */}
+          {/* Password Input */}
           <div className="space-y-2">
             <div className="flex justify-between items-center ml-1">
-              <label className="text-sm font-bold text-slate-700">Password</label>
-              <button type="button" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">Forgot Password?</button>
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Access Key</label>
+              <button type="button" className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-tighter">Reset Password</button>
             </div>
-            <div className="relative">
+            <div className="relative group">
+              <Lock className="absolute left-4 top-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 required
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="w-full p-4 border-slate-200 border rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 text-slate-600 font-medium pr-12"
+                className="w-full p-4 pl-12 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700 pr-12"
               />
               <button
                 type="button"
@@ -111,50 +128,41 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Remember Me Toggle (Optional UI only) */}
-          <div className="flex items-center space-x-2 ml-1">
-            <input type="checkbox" id="remember" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <label htmlFor="remember" className="text-xs font-semibold text-slate-500 cursor-pointer">Remember for 30 days</label>
-          </div>
-
-          {/* Submit Button */}
+          {/* Login Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group"
+            className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[10px] hover:bg-indigo-600 transition-all shadow-2xl shadow-slate-200 flex items-center justify-center space-x-3 disabled:opacity-70 group active:scale-[0.98]"
           >
             {loading ? (
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>Authenticating...</span>
-              </div>
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
               <>
-                <span>Sign In to Dashboard</span>
-                <LogIn size={18} className="group-hover:translate-x-1 transition-transform" />
+                <span>Execute Authentication</span>
+                <LogIn size={16} className="group-hover:translate-x-1 transition-transform" />
               </>
             )}
           </button>
 
-          {/* Register Link */}
-          <p className="text-center text-sm text-slate-500 font-medium pt-2">
-            Don't have an account?{" "}
+          {/* Registration Link */}
+          <p className="text-center text-xs font-bold text-slate-400 pt-2 uppercase tracking-tight">
+            New Entity?{" "}
             <button 
               type="button" 
               onClick={() => navigate("/signup")} 
-              className="text-indigo-600 font-bold hover:underline"
+              className="text-indigo-600 font-black hover:underline underline-offset-4"
             >
-              Start Free Trial
+              Initialize Workspace
             </button>
           </p>
         </form>
 
-        {/* Trust Badge */}
-        <div className="mt-10 pt-6 border-t border-slate-100 flex items-center justify-center space-x-2 opacity-50">
+        {/* Security Footer */}
+        <div className="mt-10 pt-6 border-t border-slate-100 flex items-center justify-center space-x-2 opacity-40">
           <ShieldCheck size={14} className="text-slate-400" />
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Secure AES-256 Encryption</span>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Protected by Enterprise Grade Encryption</span>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

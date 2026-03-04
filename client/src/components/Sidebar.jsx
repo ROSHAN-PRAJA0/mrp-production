@@ -9,7 +9,8 @@ import {
   LogOut, 
   PhoneCall, 
   ShoppingBag,
-  ShieldCheck // Naya icon add kiya
+  ShieldCheck,
+  Truck // Add this here
 } from "lucide-react";
 import { auth } from "../config/firebase";
 import { signOut } from "firebase/auth";
@@ -35,6 +36,8 @@ export default function Sidebar() {
     // ✅ Quality Control ka naya tab
     { icon: <ShieldCheck size={20}/>, label: "Quality Control", path: "/quality-control" }, 
     { icon: <Package size={20}/>, label: "Inventory", path: "/inventory" },
+    
+{ icon: <Truck size={20}/>, label: "Dispatch/Sales", path: "/dispatch" },
     { icon: <ShoppingBag size={20}/>, label: "Procurement", path: "/procurement" },
     { icon: <Users size={20}/>, label: "Employees", path: "/employees" },
     { icon: <Settings size={20}/>, label: "Settings", path: "/settings" },
