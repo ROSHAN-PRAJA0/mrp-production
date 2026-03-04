@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useContext } from "react";
-import { collection, onSnapshot, deleteDoc, doc, query, where } from "firebase/firestore";
+import { 
+  collection, 
+  onSnapshot, 
+  deleteDoc, 
+  doc, 
+  query, 
+  where, 
+  updateDoc, 
+  increment, 
+  addDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
 import { db } from "../../config/firebase";
 import { AuthContext } from "../../routes/AuthProvider";
-import { Trash2, Clock, CheckCircle } from "lucide-react";
+import { Trash2, Clock, CheckCircle, PackagePlus } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function PurchaseOrdersPage() {
@@ -27,6 +38,41 @@ export default function PurchaseOrdersPage() {
 
     return () => unsub();
   }, [user]);
+
+  // ✅ New Function: Material milne par Inventory update karne ke liye
+  const handleReceiveStock = async (order) => {
+    if (!order.itemid) return toast.error("Item ID missing!");
+    
+    const toastId = toast.loading("Updating inventory...");
+    try {
+      // 1. Stock quantity badhayein (itemid yahan stock document ki ID honi chahiye)
+      const stockRef = doc(db, "users", user.uid, "stocks", order.itemid);
+      await updateDoc(stockRef, {
+        quantity: increment(Number(order.requestedQty)),
+        updatedAt: serverTimestamp()
+      });
+
+      // 2. Stock Movement record karein
+      await addDoc(collection(db, "users", user.uid, "movements"), {
+        itemid: order.itemid,
+        name: order.name,
+        type: "IN",
+        quantity: Number(order.requestedQty),
+        reason: `Procured from ${order.supplierName}`,
+        timestamp: serverTimestamp(),
+        user: user.email
+      });
+
+      // 3. Order status ko "completed" mark karein
+      const reorderRef = doc(db, "reorders", order.id);
+      await updateDoc(reorderRef, { status: "completed" });
+
+      toast.success(`${order.name} added to inventory!`, { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update inventory. Make sure the item exists.", { id: toastId });
+    }
+  };
 
   const deletePO = async (id) => {
     if (window.confirm("Delete this purchase order record?")) {
@@ -79,23 +125,23 @@ export default function PurchaseOrdersPage() {
 
           <tbody className="divide-y text-sm">
             {reorders.map((order) => (
-              <tr key={order.id}>
+              <tr key={order.id} className="group hover:bg-slate-50 transition-colors">
                 <td className="py-4">
-                  <p className="font-bold">{order.name}</p>
-                  <p className="text-xs text-indigo-500">
-                    SKU: {order.itemid}
+                  <p className="font-bold text-slate-800">{order.name}</p>
+                  <p className="text-xs text-indigo-500 font-black italic">
+                    REF: {order.itemid}
                   </p>
                 </td>
 
-                <td>{order.supplierName}</td>
+                <td className="font-medium text-slate-600">{order.supplierName}</td>
 
-                <td className="text-center">
+                <td className="text-center font-black text-slate-800">
                   {order.requestedQty}
                 </td>
 
                 <td className="text-center">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-black ${
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
                       order.status === "pending"
                         ? "bg-amber-100 text-amber-600"
                         : "bg-emerald-100 text-emerald-600"
@@ -106,15 +152,36 @@ export default function PurchaseOrdersPage() {
                 </td>
 
                 <td className="text-right">
-                  <button
-                    onClick={() => deletePO(order.id)}
-                    className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex justify-end gap-2">
+                    {/* ✅ "Add to Stock" button: Sirf tab dikhega jab status "pending" ho */}
+                    {order.status === "pending" && (
+                      <button
+                        onClick={() => handleReceiveStock(order)}
+                        className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-slate-900 transition shadow-md flex items-center gap-1"
+                        title="Receive Stock"
+                      >
+                        <PackagePlus size={16} />
+                        <span className="text-[10px] font-black pr-1">ADD</span>
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={() => deletePO(order.id)}
+                      className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+            {reorders.length === 0 && (
+              <tr>
+                <td colSpan="5" className="py-20 text-center text-slate-400 font-bold italic">
+                  No purchase orders found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

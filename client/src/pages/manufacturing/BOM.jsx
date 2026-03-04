@@ -3,7 +3,7 @@ import { db } from "../../config/firebase";
 import { collection, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
 import { AuthContext } from "../../routes/AuthProvider";
 import Select from "react-select";
-import { Plus, Trash2, Save, ListChecks, Package, Calculator, Trash } from "lucide-react";
+import { Plus, Trash2, Save, Calculator, Trash, Settings2, Percent } from "lucide-react";
 import toast from "react-hot-toast";
 
 const BOM = () => {
@@ -16,6 +16,10 @@ const BOM = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [recipe, setRecipe] = useState([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
   const [loading, setLoading] = useState(false);
+
+  // New states for calculation
+  const [machineCost, setMachineCost] = useState(0);
+  const [margin, setMargin] = useState(20); // Default 20% margin
 
   const fetchAllData = async () => {
     if (!userId) return;
@@ -47,9 +51,16 @@ const BOM = () => {
 
   useEffect(() => { fetchAllData(); }, [userId]);
 
-  const totalEstimateCost = useMemo(() => {
+  const totalMaterialCost = useMemo(() => {
     return recipe.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price || 0)), 0);
   }, [recipe]);
+
+  // Combined Calculation: (Material Cost + Machine Cost) + Margin
+  const finalMRP = useMemo(() => {
+    const baseCost = totalMaterialCost + Number(machineCost);
+    const marginAmount = baseCost * (Number(margin) / 100);
+    return baseCost + marginAmount;
+  }, [totalMaterialCost, machineCost, margin]);
 
   const addIngredient = () => {
     setRecipe([...recipe, { materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
@@ -69,13 +80,18 @@ const BOM = () => {
         productId: selectedProduct.value,
         productName: selectedProduct.label,
         ingredients: recipe,
-        totalEstimatedCost: totalEstimateCost,
+        materialCost: totalMaterialCost,
+        machineCost: Number(machineCost),
+        margin: Number(margin),
+        finalMRP: finalMRP, // Saving calculated MRP
         createdBy: userId,
         createdAt: serverTimestamp()
       });
-      toast.success("BOM saved successfully!");
+      toast.success("BOM and MRP saved successfully!");
       setRecipe([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
       setSelectedProduct(null);
+      setMachineCost(0);
+      setMargin(20);
       fetchAllData();
     } catch (error) {
       toast.error("Failed to save BOM");
@@ -98,8 +114,6 @@ const BOM = () => {
 
   return (
     <div className="p-8 space-y-8 text-left bg-[#f8fafc] min-h-screen">
-      
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* BUILDER SECTION */}
         <div className="lg:col-span-1">
@@ -153,9 +167,45 @@ const BOM = () => {
                 ))}
               </div>
 
-              <div className="p-5 bg-indigo-50 rounded-3xl border border-indigo-100 flex justify-between items-center shadow-inner">
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">Estimated Total</span>
-                <span className="text-xl font-black text-indigo-600 tracking-tight">₹{totalEstimateCost.toLocaleString()}</span>
+              {/* Advanced Costing Inputs */}
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-black mb-1 block ml-1">Machine Cost (₹)</label>
+                  <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                    <Settings2 size={14} className="text-slate-400 mr-2" />
+                    <input 
+                      type="number" 
+                      value={machineCost} 
+                      onChange={(e) => setMachineCost(e.target.value)} 
+                      className="bg-transparent w-full text-xs font-bold outline-none" 
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-black mb-1 block ml-1">Margin (%)</label>
+                  <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                    <Percent size={14} className="text-slate-400 mr-2" />
+                    <input 
+                      type="number" 
+                      value={margin} 
+                      onChange={(e) => setMargin(e.target.value)} 
+                      className="bg-transparent w-full text-xs font-bold outline-none" 
+                      placeholder="20"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 bg-indigo-50 rounded-3xl border border-indigo-100 space-y-2 shadow-inner">
+                <div className="flex justify-between items-center opacity-70">
+                  <span className="text-[9px] font-black text-indigo-400 uppercase">Material + Machine</span>
+                  <span className="text-xs font-bold text-slate-600">₹{(totalMaterialCost + Number(machineCost)).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">Estimated Final MRP</span>
+                  <span className="text-xl font-black text-indigo-600 tracking-tight">₹{finalMRP.toLocaleString()}</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -180,8 +230,8 @@ const BOM = () => {
                 <div className="flex justify-between items-start mb-6">
                   <div>
                     <h4 className="text-xl font-bold text-slate-800 leading-tight">{bom.productName}</h4>
-                    <div className="flex gap-2 mt-2">
-                      <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">₹{bom.totalEstimatedCost?.toLocaleString()} Cost</span>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">₹{bom.finalMRP?.toLocaleString()} MRP</span>
                       <span className="bg-slate-50 text-slate-400 text-[9px] font-black px-3 py-1 rounded-full uppercase">{bom.ingredients.length} Parts</span>
                     </div>
                   </div>

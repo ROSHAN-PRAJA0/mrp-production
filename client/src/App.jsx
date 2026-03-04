@@ -23,7 +23,7 @@ import ProductionSchedule from "./pages/manufacturing/ProductionSchedule";
 import Employees from "./pages/Employees";
 import Settings from "./pages/Settings";
 import CRM from "./pages/CRM";
-
+import QualityControl from "./pages/QualityControl";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 function App() {
@@ -165,7 +165,14 @@ function App() {
           </ProtectedRoute>
         }
       />
-
+<Route
+  path="/quality-control"
+  element={
+    <ProtectedRoute allowedRoles={["admin", "manager"]}>
+      <QualityControl />
+    </ProtectedRoute>
+  }
+/>
       {/* Admin Only */}
       <Route
         path="/employees"

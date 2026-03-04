@@ -1,40 +1,66 @@
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import Sidebar from "../../components/Sidebar";
 import Topbar from "../../components/Topbar";
 import { 
   TrendingUp, 
   Package, 
-  ShoppingCart, 
   Activity, 
   AlertTriangle,
   Factory,
   CheckCircle2,
-  Clock
+  Clock,
+  DollarSign,
+  BarChart3
 } from "lucide-react";
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from "recharts";
 
 export default function AdminDashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [stats, setStats] = useState({
-    totalInventoryValue: 0,
+    totalRawMaterialCost: 0,
+    estimatedRevenue: 0,
+    netProfit: 0,
     activeOrders: 0,
     lowStockAlerts: 0,
     completedToday: 0
   });
   const [recentMovements, setRecentMovements] = useState([]);
+  const [forecastSummary, setForecastSummary] = useState([]);
 
   useEffect(() => {
-    // Live Stock Data for Inventory Value and Alerts
+    if (!user.uid) return;
+
+    // ✅ Combined Financial Logic: Revenue, Cost & Profit
     const unsubStocks = onSnapshot(collection(db, "users", user.uid, "stocks"), (snap) => {
       const items = snap.docs.map(d => d.data());
-      const value = items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.actualPrice || 0)), 0);
-      const alerts = items.filter(item => Number(item.quantity) < 100).length;
-      setStats(prev => ({ ...prev, totalInventoryValue: value, lowStockAlerts: alerts }));
+      
+      let rawMaterialCost = 0;
+      let finishedGoodsRevenue = 0;
+      let alerts = 0;
+
+      items.forEach(item => {
+        const qty = Number(item.quantity || 0);
+        if (item.category === "Finished Goods") {
+          // Finished Goods ki value selling price (MRP) se calculate hogi
+          finishedGoodsRevenue += (qty * Number(item.sellingPrice || 0));
+        } else {
+          // Raw Material ki value actual purchase price se calculate hogi
+          rawMaterialCost += (qty * Number(item.actualPrice || 0));
+          if (qty < 100) alerts++;
+        }
+      });
+
+      setStats(prev => ({ 
+        ...prev, 
+        totalRawMaterialCost: rawMaterialCost,
+        estimatedRevenue: finishedGoodsRevenue,
+        netProfit: finishedGoodsRevenue - rawMaterialCost, // Profit = Revenue - Cost
+        lowStockAlerts: alerts 
+      }));
     });
 
     // Live Manufacturing Orders
@@ -45,11 +71,18 @@ export default function AdminDashboard() {
       setStats(prev => ({ ...prev, activeOrders: active, completedToday: completed }));
     });
 
-    // Recent Movements for the chart/list
-    const qMovements = query(collection(db, "users", user.uid, "movements"), orderBy("timestamp", "desc"), limit(6));
+    // Recent Movements
+    const qMovements = query(collection(db, "users", user.uid, "movements"), orderBy("timestamp", "desc"), limit(5));
     const unsubMove = onSnapshot(qMovements, (snap) => {
       setRecentMovements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
+
+    // Simple Forecasting Summary for Dashboard
+    const fetchForecast = async () => {
+      const crmSnap = await getDocs(collection(db, "customer_requests"));
+      setForecastSummary(crmSnap.docs.length); // Kitne inquiries pending hain
+    };
+    fetchForecast();
 
     return () => { unsubStocks(); unsubOrders(); unsubMove(); };
   }, [user.uid]);
@@ -64,45 +97,45 @@ export default function AdminDashboard() {
           {/* Welcome Header */}
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                Welcome, {user.name || "Admin"}
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight italic">
+                {user.name || "Admin"}'s Command Center
               </h2>
-              <p className="text-slate-500 font-medium">Factory production and inventory overview.</p>
+              <p className="text-slate-500 font-medium">Real-time Financial & Production Intelligence.</p>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest">
-              <Activity size={14} /> System Live
+              <Activity size={14} className="animate-pulse" /> System Active
             </div>
           </div>
 
-          {/* Metric Cards */}
+          {/* ✅ New Financial Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <MetricCard 
-              title="Inventory Value" 
-              value={`₹${stats.totalInventoryValue.toLocaleString()}`} 
+              title="Raw Material Value" 
+              value={`₹${stats.totalRawMaterialCost.toLocaleString()}`} 
               icon={<Package />} 
-              trend="+4.2%" 
+              trend="Current Assets" 
               color="indigo" 
             />
             <MetricCard 
-              title="Active Work Orders" 
-              value={stats.activeOrders} 
-              icon={<Factory />} 
-              trend="Steady" 
+              title="Estimated Revenue" 
+              value={`₹${stats.estimatedRevenue.toLocaleString()}`} 
+              icon={<TrendingUp />} 
+              trend="Market Value" 
               color="blue" 
             />
             <MetricCard 
-              title="Low Stock Alerts" 
-              value={stats.lowStockAlerts} 
-              icon={<AlertTriangle />} 
-              trend={stats.lowStockAlerts > 0 ? "Action Required" : "Healthy"} 
-              color={stats.lowStockAlerts > 0 ? "red" : "emerald"} 
+              title="Net Profit" 
+              value={`₹${stats.netProfit.toLocaleString()}`} 
+              icon={<DollarSign />} 
+              trend={stats.netProfit >= 0 ? "Surplus" : "Deficit"} 
+              color={stats.netProfit >= 0 ? "emerald" : "red"} 
             />
             <MetricCard 
-              title="Completed Units" 
-              value={stats.completedToday} 
-              icon={<CheckCircle2 />} 
-              trend="+12%" 
-              color="emerald" 
+              title="Active Production" 
+              value={stats.activeOrders} 
+              icon={<Factory />} 
+              trend={`${forecastSummary} CRM Needs`} 
+              color="orange" 
             />
           </div>
 
@@ -110,14 +143,13 @@ export default function AdminDashboard() {
             {/* Efficiency Chart */}
             <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  <TrendingUp className="text-indigo-600" size={20}/> 
-                  Production Efficiency
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
+                  <BarChart3 className="text-indigo-600" size={20}/> 
+                  Output Performance
                 </h3>
-                <select className="bg-slate-50 border-none text-[10px] font-black uppercase p-2 rounded-lg outline-none">
-                  <option>Last 7 Days</option>
-                  <option>Last 30 Days</option>
-                </select>
+                <div className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
+                  Live Analytics
+                </div>
               </div>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -125,8 +157,8 @@ export default function AdminDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
-                    <Bar dataKey="output" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={30} />
+                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                    <Bar dataKey="output" fill="#6366f1" radius={[10, 10, 0, 0]} barSize={35} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -134,15 +166,15 @@ export default function AdminDashboard() {
 
             {/* Recent Activity Ledger */}
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-              <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 uppercase tracking-tighter">
                 <Clock className="text-indigo-600" size={20}/> 
                 Live Activity
               </h3>
               <div className="space-y-4">
-                {recentMovements.length > 0 ? recentMovements.map((move) => (
-                  <div key={move.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                {recentMovements.map((move) => (
+                  <div key={move.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all border border-transparent hover:border-slate-200">
                     <div className="flex flex-col">
-                      <span className="font-bold text-slate-700 text-sm truncate max-w-[120px]">{move.name}</span>
+                      <span className="font-bold text-slate-700 text-sm truncate max-w-[110px]">{move.name}</span>
                       <span className="text-[9px] font-black text-indigo-500 uppercase">{move.type} • {move.quantity} Units</span>
                     </div>
                     <span className={`text-[9px] font-black px-2 py-1 rounded-lg ${
@@ -151,9 +183,7 @@ export default function AdminDashboard() {
                       {move.type === "IN" ? "+ STOCK" : "- STOCK"}
                     </span>
                   </div>
-                )) : (
-                  <p className="text-center py-10 text-slate-400 font-bold italic text-sm">No recent movements</p>
-                )}
+                ))}
               </div>
             </div>
           </div>
@@ -168,30 +198,28 @@ function MetricCard({ title, value, icon, trend, color }) {
     indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
     blue: "bg-blue-50 text-blue-600 border-blue-100",
     red: "bg-red-50 text-red-600 border-red-100",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100"
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    orange: "bg-orange-50 text-orange-600 border-orange-100"
   };
 
   return (
-    <div className={`p-6 rounded-[2rem] border shadow-sm ${colors[color]} flex flex-col gap-4 relative overflow-hidden group`}>
-      <div className="bg-white/80 p-3 rounded-2xl shadow-sm w-fit z-10">{icon}</div>
+    <div className={`p-6 rounded-[2.5rem] border shadow-sm ${colors[color]} flex flex-col gap-4 relative overflow-hidden group hover:scale-[1.02] transition-transform`}>
+      <div className="bg-white/90 p-3 rounded-2xl shadow-sm w-fit z-10">{icon}</div>
       <div className="z-10">
         <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{title}</p>
-        <h4 className="text-2xl font-black">{value}</h4>
+        <h4 className="text-2xl font-black italic">{value}</h4>
       </div>
-      <div className="text-[9px] font-black uppercase tracking-tighter opacity-60 z-10">{trend}</div>
+      <div className="text-[9px] font-black uppercase tracking-tighter bg-white/50 w-fit px-2 py-1 rounded-lg z-10">{trend}</div>
       <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-        {React.cloneElement(icon, { size: 80 })}
+        {React.cloneElement(icon, { size: 100 })}
       </div>
     </div>
   );
 }
 
 const mockChartData = [
-  { day: "Mon", output: 45 },
-  { day: "Tue", output: 52 },
-  { day: "Wed", output: 48 },
-  { day: "Thu", output: 61 },
-  { day: "Fri", output: 55 },
-  { day: "Sat", output: 67 },
+  { day: "Mon", output: 45 }, { day: "Tue", output: 52 },
+  { day: "Wed", output: 48 }, { day: "Thu", output: 61 },
+  { day: "Fri", output: 55 }, { day: "Sat", output: 67 },
   { day: "Sun", output: 40 },
 ];
