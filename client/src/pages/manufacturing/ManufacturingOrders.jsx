@@ -30,7 +30,6 @@ const ManufacturingOrders = () => {
   }, [user?.uid]);
 
   const fetchProducts = async () => {
-    // ✅ Added adminId filter for multi-tenancy
     const q = query(
       collection(db, "inventory"), 
       where("adminId", "==", user.uid)
@@ -45,7 +44,6 @@ const ManufacturingOrders = () => {
 
   const fetchOrders = async () => {
     if (!user?.uid) return;
-    // ✅ Added adminId filter for multi-tenancy
     const q = query(
       collection(db, "manufacturing_orders"), 
       where("adminId", "==", user.uid)
@@ -63,7 +61,6 @@ const ManufacturingOrders = () => {
     try {
       const selectedProd = products.find(p => p.value === newOrder.productId);
       
-      // ✅ Included adminId in the new document
       await addDoc(collection(db, "manufacturing_orders"), {
         ...newOrder,
         adminId: user.uid, 
@@ -88,7 +85,6 @@ const ManufacturingOrders = () => {
   const handleStartProduction = async (order) => {
     const toastId = toast.loading("Validating BOM & Raw Material Stock...");
     try {
-      // ✅ Added adminId filter to BOM search
       const q = query(
         collection(db, "boms"), 
         where("productId", "==", order.productId),
@@ -100,7 +96,6 @@ const ManufacturingOrders = () => {
       
       const bom = bomSnap.docs[0].data();
 
-      // Check stock for all ingredients
       for (const ing of bom.ingredients) {
         const totalRequired = Number(ing.quantity) * Number(order.quantity);
         const stockRef = doc(db, "users", user.uid, "stocks", ing.materialId);
@@ -111,7 +106,6 @@ const ManufacturingOrders = () => {
         }
       }
 
-      // Deduct stock automatically
       for (const ing of bom.ingredients) {
         const totalDeduct = Number(ing.quantity) * Number(order.quantity);
         await updateDoc(doc(db, "users", user.uid, "stocks", ing.materialId), {
@@ -148,12 +142,12 @@ const ManufacturingOrders = () => {
         updatedAt: serverTimestamp()
       });
 
-      // Send to Quality Control if Good units are logged
       if (doneAmount > 0) {
-        // ✅ Included adminId in quality inspections
+        // ✅ ADDED productId: order.productId to the record below
         await addDoc(collection(db, "quality_inspections"), {
           adminId: user.uid,
           orderId: order.id,
+          productId: order.productId, 
           productName: order.productName,
           quantity: doneAmount,
           status: "Pending Inspection",
@@ -265,7 +259,6 @@ const ManufacturingOrders = () => {
         </table>
       </div>
 
-      {/* CREATE ORDER MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-[3rem] w-full max-w-lg p-12 shadow-2xl animate-in zoom-in duration-300">

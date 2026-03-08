@@ -7,7 +7,7 @@ import {
 import { AuthContext } from "../routes/AuthProvider";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
-import { ShieldCheck, CheckCircle2, Package, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, CheckCircle2, Package, RotateCcw, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function QualityControl() {
@@ -19,7 +19,6 @@ export default function QualityControl() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    // Multi-tenant isolation
     const q = query(
       collection(db, "quality_inspections"), 
       where("adminId", "==", user.uid)
@@ -36,7 +35,18 @@ export default function QualityControl() {
     return () => unsub();
   }, [user]);
 
+ // ... (keep imports the same)
+
   const handleQCStatus = async (item, status) => {
+    // 1. Identify the Product ID (Checking multiple possible field names)
+    const pId = item.productId || item.itemid;
+
+    if (!item.id || !pId) {
+      toast.error("CRITICAL: This item is missing a Product ID reference.");
+      console.log("Missing Data Debug:", item);
+      return;
+    }
+
     const reason = status === "Fail" ? window.prompt("Enter reason for Rework:") : "QC Passed";
     if (status === "Fail" && !reason) return; 
 
@@ -45,12 +55,11 @@ export default function QualityControl() {
     
     try {
       if (status === "Pass") {
-        // 1. Fetch BOM for Unit Cost (Robust check)
         let unitCost = 0;
         try {
           const bomQuery = query(
             collection(db, "boms"), 
-            where("productId", "==", item.productId),
+            where("productId", "==", pId),
             where("adminId", "==", user.uid)
           );
           const bomSnap = await getDocs(bomQuery);
@@ -58,15 +67,15 @@ export default function QualityControl() {
             unitCost = bomSnap.docs[0].data().finalMRP || 0;
           }
         } catch (e) {
-          console.warn("BOM fetch failed, continuing with 0 cost", e);
+          console.warn("BOM fetch failed", e);
         }
 
-        // 2. Add to Finished Goods Inventory
-        const stockRef = doc(db, "users", user.uid, "stocks", item.productId);
+        // 2. Add to Finished Goods Inventory using the confirmed pId
+        const stockRef = doc(db, "users", user.uid, "stocks", pId);
         await setDoc(stockRef, {
-          name: item.productName,
-          itemid: item.productId, 
-          quantity: increment(Number(item.quantity)),
+          name: item.productName || "Unknown Product",
+          itemid: pId, 
+          quantity: increment(Number(item.quantity || 0)),
           category: "Finished Goods", 
           sellingPrice: unitCost,
           updatedAt: serverTimestamp(),
@@ -75,10 +84,10 @@ export default function QualityControl() {
 
         // 3. Log Movement
         await addDoc(collection(db, "users", user.uid, "movements"), {
-          itemid: item.productId,
-          name: item.productName,
+          itemid: pId,
+          name: item.productName || "Unknown Product",
           type: "IN",
-          quantity: Number(item.quantity),
+          quantity: Number(item.quantity || 0),
           reason: "QC Passed - Production Complete",
           timestamp: serverTimestamp(),
           user: user.email,
@@ -88,11 +97,13 @@ export default function QualityControl() {
         toast.success(`${item.quantity} units moved to Finished Goods.`, { id: toastId });
       } else {
         // 4. REWORK LOGIC
+        if (!item.orderId) throw new Error("Missing Manufacturing Order ID");
+
         const orderRef = doc(db, "manufacturing_orders", item.orderId);
         await updateDoc(orderRef, {
           status: "Rework Required",
           lastQCReason: reason,
-          completedQty: increment(-Number(item.quantity)) 
+          completedQty: increment(-Number(item.quantity || 0)) 
         });
 
         toast.error("Batch sent back for Rework.", { id: toastId });
@@ -102,13 +113,14 @@ export default function QualityControl() {
       await deleteDoc(doc(db, "quality_inspections", item.id));
       
     } catch (err) {
-      console.error("CRITICAL QC ERROR:", err);
-      toast.error(`Error: ${err.message}. Check Database Permissions.`, { id: toastId });
+      console.error("QC EXECUTION ERROR:", err);
+      toast.error(`Error: ${err.message}`, { id: toastId });
     } finally {
       setProcessingId(null);
     }
   };
 
+// ... (keep the return/JSX part the same as the previous response)
   return (
     <div className="flex h-screen bg-[#f8fafc] text-slate-900">
       <Sidebar />
@@ -134,7 +146,7 @@ export default function QualityControl() {
                         <h4 className="font-extrabold text-slate-800 text-xl">{item.productName}</h4>
                         <div className="flex gap-4 mt-2 font-bold text-[11px] uppercase">
                           <span className="text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg">Batch: {item.quantity}</span>
-                          <span className="text-slate-400">Ref: {item.orderId?.slice(-6)}</span>
+                          <span className="text-slate-400">Ref: {item.orderId ? item.orderId.slice(-6) : 'N/A'}</span>
                         </div>
                       </div>
                     </div>
@@ -143,14 +155,14 @@ export default function QualityControl() {
                       <button 
                         disabled={processingId === item.id}
                         onClick={() => handleQCStatus(item, "Fail")} 
-                        className="flex items-center gap-2 px-6 py-4 bg-red-50 text-red-600 font-black rounded-2xl hover:bg-red-500 hover:text-white transition-all text-[11px] uppercase"
+                        className="flex items-center gap-2 px-6 py-4 bg-red-50 text-red-600 font-black rounded-2xl hover:bg-red-500 hover:text-white transition-all text-[11px] uppercase disabled:opacity-50"
                       >
                         {processingId === item.id ? <Loader2 className="animate-spin" size={16}/> : <RotateCcw size={16} />} Rework
                       </button>
                       <button 
                         disabled={processingId === item.id}
                         onClick={() => handleQCStatus(item, "Pass")} 
-                        className="flex items-center gap-2 px-6 py-4 bg-emerald-50 text-emerald-600 font-black rounded-2xl hover:bg-emerald-500 hover:text-white transition-all text-[11px] uppercase"
+                        className="flex items-center gap-2 px-6 py-4 bg-emerald-50 text-emerald-600 font-black rounded-2xl hover:bg-emerald-500 hover:text-white transition-all text-[11px] uppercase disabled:opacity-50"
                       >
                         {processingId === item.id ? <Loader2 className="animate-spin" size={16}/> : <CheckCircle2 size={16} />} Approve
                       </button>
