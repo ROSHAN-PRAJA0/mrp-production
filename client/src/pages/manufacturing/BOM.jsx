@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useContext, useMemo } from "react";
 import { db } from "../../config/firebase";
-import { collection, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
+import { 
+  collection, getDocs, addDoc, serverTimestamp, 
+  deleteDoc, doc, query, where 
+} from "firebase/firestore";
 import { AuthContext } from "../../routes/AuthProvider";
 import Select from "react-select";
-import { Plus, Trash2, Save, Calculator, Trash, Settings2, Percent } from "lucide-react";
+import { Plus, Trash2, Save, Layers } from "lucide-react";
 import toast from "react-hot-toast";
 
 const BOM = () => {
@@ -16,278 +19,235 @@ const BOM = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [recipe, setRecipe] = useState([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
   const [loading, setLoading] = useState(false);
-
-  // New states for calculation
   const [machineCost, setMachineCost] = useState(0);
-  const [margin, setMargin] = useState(20); // Default 20% margin
+  const [margin, setMargin] = useState(20);
 
   const fetchAllData = async () => {
     if (!userId) return;
     try {
-      const prodSnap = await getDocs(collection(db, "inventory"));
-      const prodList = prodSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(i => i.type === "Finished Good")
-        .map(i => ({ value: i.id, label: i.name }));
-      setProducts(prodList);
+      const prodQuery = query(collection(db, "inventory"), where("adminId", "==", userId));
+      const prodSnap = await getDocs(prodQuery);
+      setProducts(prodSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(item => item.type === "Finished Good")
+        .map(item => ({ value: item.id, label: item.name }))
+      );
+      
+      const stockSnap = await getDocs(collection(db, "users", userId, "stocks"));
+      setRawMaterials(stockSnap.docs.map(d => ({
+        value: d.id, 
+        label: `${d.data().itemid} - ${d.data().name}`, 
+        name: d.data().name, 
+        itemid: d.data().itemid, 
+        price: d.data().actualPrice || 0
+      })));
 
-      const stockRef = collection(db, "users", userId, "stocks");
-      const stockSnap = await getDocs(stockRef);
-      const matList = stockSnap.docs.map(doc => ({
-        value: doc.id,
-        label: `${doc.data().itemid} - ${doc.data().name} (₹${doc.data().actualPrice || 0})`,
-        name: doc.data().name,
-        itemid: doc.data().itemid,
-        price: doc.data().actualPrice || 0
-      }));
-      setRawMaterials(matList);
-
-      const bomSnap = await getDocs(collection(db, "boms"));
+      const bomQuery = query(collection(db, "boms"), where("adminId", "==", userId));
+      const bomSnap = await getDocs(bomQuery);
       setSavedBoms(bomSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (error) {
-      toast.error("Error loading data");
+    } catch (e) { 
+      console.error(e);
+      toast.error("Error loading data"); 
     }
   };
 
-  useEffect(() => { fetchAllData(); }, [userId]);
+  useEffect(() => { 
+    if (userId) fetchAllData(); 
+  }, [userId]);
 
-  const totalMaterialCost = useMemo(() => {
-    return recipe.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price || 0)), 0);
-  }, [recipe]);
-
-  // Combined Calculation: (Material Cost + Machine Cost) + Margin
-  const finalMRP = useMemo(() => {
-    const baseCost = totalMaterialCost + Number(machineCost);
-    const marginAmount = baseCost * (Number(margin) / 100);
-    return baseCost + marginAmount;
-  }, [totalMaterialCost, machineCost, margin]);
-
-  const addIngredient = () => {
-    setRecipe([...recipe, { materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
+  // ✅ LOGIC: Filter options to prevent duplicate material selection
+  const getFilteredOptions = (index) => {
+    const selectedIds = recipe.map((item, i) => i !== index ? item.materialId : null).filter(Boolean);
+    return rawMaterials.filter(option => !selectedIds.includes(option.value));
   };
 
-  const removeIngredient = (index) => {
-    setRecipe(recipe.filter((_, i) => i !== index));
+  const totalMaterialCost = useMemo(() => 
+    recipe.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.price || 0)), 0), 
+  [recipe]);
+
+  const finalMRP = useMemo(() => 
+    (totalMaterialCost + Number(machineCost)) * (1 + Number(margin)/100), 
+  [totalMaterialCost, machineCost, margin]);
+
+  const handleInputChange = (index, field, value) => {
+    const updated = [...recipe];
+    updated[index][field] = value;
+    setRecipe(updated);
   };
 
   const handleSaveBOM = async () => {
     if (!selectedProduct || recipe.some(r => !r.materialId)) {
-      return toast.error("Please select a product and all materials");
+      return toast.error("Please select a product and add ingredients.");
     }
     setLoading(true);
     try {
       await addDoc(collection(db, "boms"), {
-        productId: selectedProduct.value,
+        productId: selectedProduct.value, 
         productName: selectedProduct.label,
-        ingredients: recipe,
-        materialCost: totalMaterialCost,
+        ingredients: recipe, 
         machineCost: Number(machineCost),
         margin: Number(margin),
-        finalMRP: finalMRP, // Saving calculated MRP
-        createdBy: userId,
+        totalMaterialCost,
+        finalMRP, 
+        adminId: userId,
+        createdBy: userId, 
         createdAt: serverTimestamp()
       });
-      toast.success("BOM and MRP saved successfully!");
+      
+      toast.success("BOM Master Saved!");
       setRecipe([{ materialId: "", quantity: 1, name: "", itemid: "", price: 0 }]);
       setSelectedProduct(null);
       setMachineCost(0);
-      setMargin(20);
       fetchAllData();
-    } catch (error) {
-      toast.error("Failed to save BOM");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteBOM = async (id) => {
-    if (window.confirm("Are you sure you want to delete this BOM?")) {
-      try {
-        await deleteDoc(doc(db, "boms", id));
-        toast.success("BOM deleted");
-        fetchAllData();
-      } catch (error) {
-        toast.error("Delete failed");
-      }
+    } catch (e) { 
+      toast.error("Save failed"); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
   return (
     <div className="p-8 space-y-8 text-left bg-[#f8fafc] min-h-screen">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* BUILDER SECTION */}
-        <div className="lg:col-span-1">
-          <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm sticky top-24">
-            <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-6">Create New BOM</h3>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] text-slate-500 uppercase font-black mb-2 block ml-1">Finished Product</label>
-                <Select options={products} onChange={setSelectedProduct} value={selectedProduct} styles={lightSelectStyles} placeholder="Select Product..." />
-              </div>
+      <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] border shadow-sm">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 uppercase italic flex items-center gap-3">
+            <Layers className="text-indigo-600" /> Bill of Materials <span className="text-indigo-600">(BOM)</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 ml-1">Define Recipes & Product Costing</p>
+        </div>
+      </div>
 
-              <div className="space-y-4">
-                <label className="text-[10px] text-slate-500 uppercase font-black mb-1 block ml-1">Raw Materials & Quantity</label>
-                {recipe.map((item, index) => (
-                  <div key={index} className="space-y-2 bg-slate-50 p-4 rounded-3xl border border-slate-100 group transition-all hover:border-indigo-200">
-                    <Select
-                      options={rawMaterials}
-                      placeholder="Search Material..."
-                      onChange={(opt) => {
-                        const newRecipe = [...recipe];
-                        newRecipe[index].materialId = opt.value;
-                        newRecipe[index].name = opt.name;
-                        newRecipe[index].itemid = opt.itemid;
-                        newRecipe[index].price = opt.price;
-                        setRecipe(newRecipe);
-                      }}
-                      styles={lightSelectStyles}
-                    />
-                    <div className="flex gap-3 items-center mt-2">
-                      <div className="flex items-center bg-white border border-slate-100 rounded-xl px-2">
-                        <span className="text-[10px] font-bold text-slate-400 px-1">QTY:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const newRecipe = [...recipe];
-                            newRecipe[index].quantity = e.target.value;
-                            setRecipe(newRecipe);
-                          }}
-                          className="w-16 p-2 text-xs font-bold outline-none text-slate-800"
-                        />
-                      </div>
-                      <span className="text-[11px] font-black text-emerald-600 italic">₹{(item.quantity * item.price).toLocaleString()}</span>
-                      <button onClick={() => removeIngredient(index)} className="ml-auto p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Advanced Costing Inputs */}
-              <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                <div>
-                  <label className="text-[10px] text-slate-500 uppercase font-black mb-1 block ml-1">Machine Cost (₹)</label>
-                  <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                    <Settings2 size={14} className="text-slate-400 mr-2" />
-                    <input 
-                      type="number" 
-                      value={machineCost} 
-                      onChange={(e) => setMachineCost(e.target.value)} 
-                      className="bg-transparent w-full text-xs font-bold outline-none" 
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 uppercase font-black mb-1 block ml-1">Margin (%)</label>
-                  <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                    <Percent size={14} className="text-slate-400 mr-2" />
-                    <input 
-                      type="number" 
-                      value={margin} 
-                      onChange={(e) => setMargin(e.target.value)} 
-                      className="bg-transparent w-full text-xs font-bold outline-none" 
-                      placeholder="20"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 bg-indigo-50 rounded-3xl border border-indigo-100 space-y-2 shadow-inner">
-                <div className="flex justify-between items-center opacity-70">
-                  <span className="text-[9px] font-black text-indigo-400 uppercase">Material + Machine</span>
-                  <span className="text-xs font-bold text-slate-600">₹{(totalMaterialCost + Number(machineCost)).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">Estimated Final MRP</span>
-                  <span className="text-xl font-black text-indigo-600 tracking-tight">₹{finalMRP.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={addIngredient} className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-[10px] font-black uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all">
-                  <Plus size={16} /> Add Ingredient
-                </button>
-
-                <button onClick={handleSaveBOM} disabled={loading} className="bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg hover:bg-indigo-600 transition-all flex items-center justify-center gap-2">
-                  {loading ? "Processing..." : <><Save size={16}/> Save Recipe</>}
-                </button>
-              </div>
-            </div>
+      <div className="bg-white border rounded-[2.5rem] p-8 shadow-sm space-y-8">
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="flex-1 min-w-[300px]">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">Target Finished Good</label>
+            <Select options={products} onChange={setSelectedProduct} value={selectedProduct} styles={customSelectStyles} placeholder="Select Product..." />
+          </div>
+          <div className="w-40">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">Machine Cost</label>
+            <input type="number" value={machineCost} onChange={(e) => setMachineCost(e.target.value)} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="₹ 0" />
+          </div>
+          <div className="w-32">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">Margin %</label>
+            <input type="number" value={margin} onChange={(e) => setMargin(e.target.value)} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="20%" />
           </div>
         </div>
 
-        {/* DISPLAY SECTION */}
-        <div className="lg:col-span-2 space-y-6">
-          <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-2">Active Master Recipes</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {savedBoms.length > 0 ? savedBoms.map((bom) => (
-              <div key={bom.id} className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all relative group">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h4 className="text-xl font-bold text-slate-800 leading-tight">{bom.productName}</h4>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">₹{bom.finalMRP?.toLocaleString()} MRP</span>
-                      <span className="bg-slate-50 text-slate-400 text-[9px] font-black px-3 py-1 rounded-full uppercase">{bom.ingredients.length} Parts</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleDeleteBOM(bom.id)}
-                    className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-sm"
-                  >
-                    <Trash size={16} />
-                  </button>
+        <div className="space-y-3">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Raw Material Requirements</label>
+          <div className="space-y-3">
+            {recipe.map((item, index) => (
+              <div key={index} className="flex items-center gap-4 bg-slate-50/50 p-3 rounded-[2rem] border border-slate-100 hover:border-indigo-200 transition-all">
+                <div className="flex-1">
+                  <Select 
+                    options={getFilteredOptions(index)} 
+                    onChange={(opt) => {
+                      handleInputChange(index, "materialId", opt.value);
+                      handleInputChange(index, "price", opt.price);
+                      handleInputChange(index, "name", opt.name);
+                      handleInputChange(index, "itemid", opt.itemid);
+                    }}
+                    value={rawMaterials.find(rm => rm.value === item.materialId)}
+                    styles={customSelectStyles} 
+                    placeholder="Search Raw Material..." 
+                  />
                 </div>
-                
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {bom.ingredients.map((ing, i) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-50 px-4 py-3 rounded-2xl border border-slate-100">
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-700">{ing.name}</p>
-                        <p className="text-[9px] font-black text-indigo-400 uppercase">{ing.itemid}</p>
-                      </div>
-                      <span className="text-[11px] font-black text-slate-900 bg-white px-3 py-1 rounded-xl border border-slate-100">{ing.quantity} Pcs</span>
-                    </div>
-                  ))}
+                <div className="w-32 flex items-center bg-white rounded-xl border px-3">
+                  <span className="text-[9px] font-black text-slate-300 uppercase mr-2">Qty</span>
+                  <input type="number" value={item.quantity} onChange={(e) => handleInputChange(index, "quantity", e.target.value)} className="w-full p-2 font-bold text-sm outline-none" />
                 </div>
+                <div className="w-32 text-center">
+                  <p className="text-[9px] font-black text-slate-300 uppercase">Subtotal</p>
+                  <p className="text-xs font-black text-emerald-600 italic">₹{(item.quantity * item.price).toLocaleString()}</p>
+                </div>
+                <button onClick={() => setRecipe(recipe.filter((_, i) => i !== index))} className="p-3 bg-red-50 text-red-400 rounded-full hover:bg-red-500 hover:text-white transition-all">
+                  <Trash2 size={16}/>
+                </button>
               </div>
-            )) : (
-              <div className="col-span-full py-24 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-white">
-                <Calculator size={48} className="mx-auto text-slate-200 mb-4" />
-                <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No saved recipes found</p>
-              </div>
-            )}
+            ))}
           </div>
+          <button onClick={() => setRecipe([...recipe, { materialId: "", quantity: 1, name: "", itemid: "", price: 0 }])} className="mt-4 flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-6 py-3 rounded-full hover:bg-indigo-600 hover:text-white transition-all">
+            <Plus size={14}/> Add Another Material Row
+          </button>
+        </div>
+
+        <div className="flex justify-between items-center pt-8 border-t border-slate-100">
+           <div className="flex gap-8">
+             <div>
+               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Material Cost</p>
+               <p className="text-lg font-bold text-slate-700">₹{totalMaterialCost.toLocaleString()}</p>
+             </div>
+             <div className="h-10 w-[1px] bg-slate-100"/>
+             <div>
+               <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest italic">Calculated MRP</p>
+               <p className="text-2xl font-black text-indigo-600">₹{finalMRP.toLocaleString()}</p>
+             </div>
+           </div>
+           <button onClick={handleSaveBOM} disabled={loading} className="bg-slate-900 text-white px-12 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-indigo-600 transition-all shadow-xl flex items-center gap-2">
+             {loading ? "Saving Master..." : <><Save size={18}/> Finalize & Save BOM</>}
+           </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-2">Recipe Master Database</h3>
+        <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
+          <table className="w-full text-left min-w-[800px]">
+            <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <tr>
+                <th className="px-8 py-5">Product Name</th>
+                <th className="px-8 py-5">Ingredient Structure</th>
+                <th className="px-8 py-5 text-center">Final Unit MRP</th>
+                <th className="px-8 py-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {savedBoms.map((bom) => (
+                <tr key={bom.id} className="hover:bg-indigo-50/20 transition-all group">
+                  <td className="px-8 py-5 font-black text-slate-800 uppercase text-sm">{bom.productName}</td>
+                  <td className="px-8 py-5">
+                    <div className="flex flex-wrap gap-2">
+                      {bom.ingredients.map((ing, i) => (
+                        <span key={i} className="text-[9px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase border">
+                          {ing.name} ({ing.quantity})
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5 text-center font-black text-indigo-600 text-base italic">₹{bom.finalMRP?.toLocaleString()}</td>
+                  <td className="px-8 py-5 text-right">
+                    <button onClick={async () => { if(window.confirm("Delete BOM?")) { await deleteDoc(doc(db, "boms", bom.id)); fetchAllData(); } }} className="p-3 text-slate-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={18}/>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 };
 
-const lightSelectStyles = {
+const customSelectStyles = {
   control: (base, state) => ({ 
     ...base, 
     background: "#f8fafc", 
     borderColor: state.isFocused ? "#6366f1" : "#f1f5f9", 
-    borderRadius: "1rem", 
-    padding: "0.4rem",
+    borderRadius: "1.2rem", 
+    padding: "0.3rem",
     boxShadow: "none",
-    fontSize: "0.8rem",
+    fontSize: "0.85rem",
     fontWeight: "700"
   }),
   option: (base, state) => ({ 
     ...base, 
     background: state.isSelected ? "#6366f1" : state.isFocused ? "#eef2ff" : "white", 
     color: state.isSelected ? "white" : "#1e293b",
-    fontSize: "0.75rem",
+    fontSize: "0.8rem",
     fontWeight: "600"
-  }),
-  singleValue: (base) => ({ ...base, color: "#1e293b" }),
-  placeholder: (base) => ({ ...base, color: "#94a3b8" })
+  })
 };
 
 export default BOM;

@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "../../config/firebase";
+import React, { useState, useContext } from "react";
 import { AuthContext } from "../../routes/AuthProvider";
 import Sidebar from "../../components/Sidebar";
 import UserMenu from "../../components/UserMenu";
@@ -8,7 +6,6 @@ import UserMenu from "../../components/UserMenu";
 // Page Components
 import PurchaseOrdersPage from "./PurchaseOrders"; 
 import ManageSuppliers from "./ManageSuppliers"; 
-import ReorderSetup from "./ReorderSetup"; 
 import Requirement from "./Requirement"; 
 import Forecasting from "./Forecasting"; 
 
@@ -16,7 +13,6 @@ import {
   ShoppingCart,
   Users,
   BarChart3,
-  AlertOctagon,
   ClipboardList,
   Activity
 } from "lucide-react";
@@ -24,19 +20,9 @@ import {
 export default function Procurement() {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("Purchase Orders");
-  const [lowStockCount, setLowStockCount] = useState(0);
 
-  // Monitor stock levels to provide a notification badge on the 'Critical On-Hand' tab
-  useEffect(() => {
-    if (!user?.uid) return;
-    
-    const q = query(collection(db, "users", user.uid, "stocks"), where("quantity", "<", 100));
-    const unsub = onSnapshot(q, (snap) => {
-      setLowStockCount(snap.docs.length);
-    });
-    
-    return () => unsub();
-  }, [user]);
+  // Humne "Critical On-Hand" wala tab aur stock monitoring logic yahan se hata diya hai
+  // Taaki MRP Matrix (Requirements) hi procurement ka main hub rahe.
 
   const pages = [
     { 
@@ -56,13 +42,6 @@ export default function Procurement() {
       icon: <BarChart3 size={16}/>, 
       component: <Forecasting />,
       description: "Predictive material demand based on CRM inquiries" 
-    },
-    { 
-      name: "Critical On-Hand", 
-      icon: <AlertOctagon size={16}/>, 
-      component: <ReorderSetup />,
-      badge: lowStockCount,
-      description: "Automated reordering for items below safety thresholds"
     },
     { 
       name: "Requirements", 
@@ -108,11 +87,6 @@ export default function Procurement() {
               >
                 {page.icon}
                 {page.name}
-                {page.badge > 0 && (
-                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full animate-bounce">
-                    {page.badge}
-                  </span>
-                )}
               </button>
             ))}
           </div>

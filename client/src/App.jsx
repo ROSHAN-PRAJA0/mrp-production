@@ -9,7 +9,7 @@ import InventoryMaster from "./pages/inventory/Inventory";
 import AddStock from "./pages/inventory/AddStock";
 import ProductAlerts from "./pages/inventory/ProductAlerts";
 import StockMovements from "./pages/inventory/StockMovements";
-import InventoryItems from "./pages/inventory/InventoryItems";
+// ✅ REMOVED: InventoryItems import as the file does not exist
 import Dispatch from "./pages/inventory/Dispatch";
 
 import Procurement from "./pages/procurement/Procurement";
@@ -65,11 +65,12 @@ function App() {
         }
       />
 
+      {/* ✅ UPDATED: Changed from InventoryItems to InventoryMaster */}
       <Route
         path="/inventory-items"
         element={
           <ProtectedRoute allowedRoles={["admin", "manager"]}>
-            <InventoryItems />
+            <InventoryMaster />
           </ProtectedRoute>
         }
       />
@@ -92,13 +93,13 @@ function App() {
         }
       />
       <Route
-  path="/dispatch"
-  element={
-    <ProtectedRoute allowedRoles={["admin", "manager"]}>
-      <Dispatch />
-    </ProtectedRoute>
-  }
-/>
+        path="/dispatch"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <Dispatch />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Procurement */}
       <Route
@@ -174,14 +175,14 @@ function App() {
           </ProtectedRoute>
         }
       />
-<Route
-  path="/quality-control"
-  element={
-    <ProtectedRoute allowedRoles={["admin", "manager"]}>
-      <QualityControl />
-    </ProtectedRoute>
-  }
-/>
+      <Route
+        path="/quality-control"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <QualityControl />
+          </ProtectedRoute>
+        }
+      />
       {/* Admin Only */}
       <Route
         path="/employees"

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { db } from "../config/firebase";
 import { 
   collection, getDocs, addDoc, serverTimestamp, 
   query, where, deleteDoc, doc, updateDoc 
 } from "firebase/firestore";
+import { AuthContext } from "../routes/AuthProvider"; // ✅ AuthContext import kiya
 import { 
   PhoneCall, User, Calendar, ClipboardList, 
   Loader2, AlertCircle, CheckCircle, Trash2, Edit, X 
@@ -13,6 +14,7 @@ import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
 const CRM = () => {
+  const { user } = useContext(AuthContext); // ✅ Current User ki ID lene ke liye
   const [customerRequests, setCustomerRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [productExists, setProductExists] = useState(null);
@@ -27,22 +29,34 @@ const CRM = () => {
     notes: ""
   });
 
+  // ✅ 1. Multi-Tenancy Fetch: Sirf wahi data jo login user ka hai
   const fetchRequests = async () => {
+    if (!user?.uid) return;
     try {
-      const snap = await getDocs(collection(db, "customer_requests"));
+      const q = query(
+        collection(db, "customer_requests"), 
+        where("adminId", "==", user.uid) // Filter by current admin
+      );
+      const snap = await getDocs(q);
       setCustomerRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error("Error fetching requests", error);
+      toast.error("Failed to load records");
     }
   };
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => { fetchRequests(); }, [user]);
 
+  // ✅ 2. Inventory Check Isolation: Apne hi stocks mein search karein
   useEffect(() => {
     const checkInventory = async () => {
+      if (!user?.uid) return;
       if (formData.productRequirement.length > 2) {
-        // Checking existing inventory for the required product
-        const q = query(collection(db, "inventory"), where("name", "==", formData.productRequirement));
+        // Users sub-collection pattern use kar rahe hain hum stocks ke liye
+        const q = query(
+          collection(db, "users", user.uid, "stocks"), 
+          where("name", "==", formData.productRequirement)
+        );
         const snap = await getDocs(q);
         setProductExists(!snap.empty);
       } else {
@@ -53,17 +67,25 @@ const CRM = () => {
       checkInventory();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [formData.productRequirement]);
+  }, [formData.productRequirement, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.customerName || !formData.productRequirement) {
-      return toast.error("Customer name and Product requirement are required");
+    
+    if (!formData.customerName || !formData.productRequirement || !formData.expectedDate) {
+      return toast.error("Schedule (Date), Customer and Product are required!");
+    }
+
+    const selectedDate = new Date(formData.expectedDate);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    if (selectedDate < today) {
+      return toast.error("Past date cannot be selected for scheduling!");
     }
 
     setLoading(true);
     try {
-      // Integration: Set status to trigger Manufacturing Module if product is new
       const status = productExists ? "Ready to Order" : "New Requirement (Need BOM)";
       
       if (editingId) {
@@ -74,12 +96,14 @@ const CRM = () => {
         });
         toast.success("Inquiry updated!");
       } else {
+        // ✅ 3. Multi-Tenancy Save: adminId tag add karein
         await addDoc(collection(db, "customer_requests"), {
           ...formData,
+          adminId: user.uid, // Ownership tag
           status: status,
           createdAt: serverTimestamp()
         });
-        toast.success(productExists ? "Requirement saved!" : "New Product requirement flagged for BOM!");
+        toast.success(productExists ? "Requirement saved!" : "New Product flagged for BOM!");
       }
       resetForm();
       fetchRequests();
@@ -124,11 +148,11 @@ const CRM = () => {
   return (
     <div className="flex h-screen bg-[#f8fafc] text-slate-900">
       <Sidebar />
-      <div className="flex-1 flex flex-col ml-64">
+      <div className="flex-1 flex flex-col ml-64 text-left">
         <Topbar title="CRM - Sales & Requirements" />
         
         <main className="p-8 overflow-y-auto w-full max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
               <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm sticky top-6">
                 <div className="flex justify-between items-center mb-6">
@@ -199,7 +223,7 @@ const CRM = () => {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 uppercase font-black ml-1">Expected Delivery</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-black ml-1">Expected Delivery (Schedule)</label>
                     <input 
                       type="date" 
                       className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
@@ -246,9 +270,15 @@ const CRM = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-4 group-hover:bg-indigo-50/50 transition-colors">
-                      <p className="text-slate-500 font-bold text-sm">Product: <span className="text-slate-900">{req.productRequirement}</span></p>
-                      <p className="text-indigo-600 font-black text-[10px] uppercase mt-1 italic">Demand: {req.quantity} units</p>
+                    <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-4 group-hover:bg-indigo-50/50 transition-colors flex justify-between items-center">
+                      <div>
+                        <p className="text-slate-500 font-bold text-sm">Product: <span className="text-slate-900">{req.productRequirement}</span></p>
+                        <p className="text-indigo-600 font-black text-[10px] uppercase mt-1 italic">Demand: {req.quantity} units</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expected Date</p>
+                         <p className="text-sm font-bold text-slate-700">{req.expectedDate || "No Date"}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
