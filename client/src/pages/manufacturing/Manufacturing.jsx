@@ -56,23 +56,7 @@ const Manufacturing = () => {
           })}
         </div>
 
-        {/* Action Bar for Global Manufacturing Settings */}
-        <div className="px-8 py-4 flex justify-between items-center">
-            <div className="flex gap-4">
-                <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-100 shadow-sm">
-                    <Activity size={14} className="text-emerald-500" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase">System Status: <span className="text-emerald-600">Syncing</span></span>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-100 shadow-sm">
-                    <BarChart3 size={14} className="text-indigo-500" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase">Shop Floor Load: <span className="text-indigo-600">Optimal</span></span>
-                </div>
-            </div>
-            <button className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                <Settings2 size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Global Settings</span>
-            </button>
-        </div>
+        
 
         {/* Content Area for Sub-Routes */}
         <main className="flex-1 overflow-y-auto p-8 pt-2">
